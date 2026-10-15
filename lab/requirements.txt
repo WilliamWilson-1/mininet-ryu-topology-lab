@@ -1,3 +1,4 @@
+# Target: Python 3.10. See README.md for build-tool pins and WSGI patch.
 ryu==4.34
-eventlet==0.30.2
-dnspython==1.16.0
+eventlet==0.33.3
+dnspython==2.2.1

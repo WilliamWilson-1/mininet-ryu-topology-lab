@@ -138,14 +138,14 @@ let appearance={theme:'system',reduced:false};try{Object.assign(appearance,JSON.
 if(!['system','light','dark'].includes(appearance.theme))appearance.theme='system';
 $('theme').value=appearance.theme;$('reduced').checked=appearance.reduced;
 let topo={switches:[],links:[],hosts:[]},services=[],chosen=null,preview=null,busy=false,connected=false,refreshing=false,currentView='topology',detailId=null,lastOpener=null,serviceSignature='';
-const DEMO_EDGES=[[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 12], [12, 13], [13, 14], [14, 15], [15, 16], [16, 17], [17, 18], [18, 19], [19, 20], [20, 1], [1, 6], [6, 11], [11, 16], [16, 1]];
+const DEMO_EDGES=[[1, 2], [2, 3], [3, 4], [4, 5], [6, 7], [7, 8], [8, 9], [9, 10], [11, 12], [12, 13], [13, 14], [14, 15], [16, 17], [17, 18], [18, 19], [19, 20], [1, 6], [2, 7], [3, 8], [4, 9], [5, 10], [6, 11], [7, 12], [8, 13], [9, 14], [10, 15], [11, 16], [12, 17], [13, 18], [14, 19], [15, 20]];
 function makeDemo(){
  const switches=Array.from({length:20},(_,i)=>i+1),next=Object.fromEntries(switches.map(n=>[n,2]));
  const links=DEMO_EDGES.map(([a,b])=>({src:Math.min(a,b),dst:Math.max(a,b),src_port:a<b?next[a]++:next[b]++,dst_port:a<b?next[b]++:next[a]++}));
  const hosts=switches.map(n=>({name:'h'+n,switch:n,port:1,ip:'10.0.0.'+n}));
  topo={version:1,switches,links,hosts};
- preview={src:'h1',dst:'h20',shortest:[1,20],longest:switches,shortest_hops:1,longest_hops:19,topology_version:1,exact:true,simple_path_count:10};
- services=[{...preview,id:'h1-h20',path:switches,cookie:536870913,status:'installed',both_directions_seen_on_all_hops:false,counters:switches.flatMap(switchId=>['h1','h20'].map(src=>({switch:switchId,src,packets:0,bytes:0,fresh:true,present:true})))}];chosen='h1-h20';connected=true;$('demo-banner').hidden=false;
+ preview={src:'h1',dst:'h20',shortest:[1,2,3,4,5,10,15,20],longest:[1,2,3,4,5,10,9,8,7,6,11,16,17,12,13,18,19,14,15,20],shortest_hops:7,longest_hops:19,topology_version:1,exact:true,simple_path_count:976};
+ services=[{...preview,id:'h1-h20',path:[1,2,3,4,5,10,9,8,7,6,11,16,17,12,13,18,19,14,15,20],cookie:536870913,status:'installed',both_directions_seen_on_all_hops:false,counters:switches.flatMap(switchId=>['h1','h20'].map(src=>({switch:switchId,src,packets:0,bytes:0,fresh:true,present:true})))}];chosen='h1-h20';connected=true;$('demo-banner').hidden=false;
 }
 for(let i=1;i<=20;i++)for(const id of ['src','dst']){const o=document.createElement('option');o.value='h'+i;o.textContent='h'+i;$(id).append(o)}$('dst').value='h20';
 function text(id,value){const e=$(id);if(e.textContent!==String(value))e.textContent=value}
@@ -180,10 +180,11 @@ function edgesOf(p){const edges=new Set();for(let i=1;i<p.length;i++)edges.add([
 function draw(){
  const svg=$('graph');svg.replaceChildren();const positions={};const css=getComputedStyle(root),color=name=>css.getPropertyValue(name).trim();
  function el(tag,attrs,value){const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[k,v]of Object.entries(attrs))e.setAttribute(k,v);if(value!==undefined)e.textContent=value;svg.append(e);return e}
- for(const n of topo.switches){const angle=2*Math.PI*(n-1)/20-Math.PI/2;positions[n]={x:440+250*Math.cos(angle),y:360+250*Math.sin(angle),hx:440+315*Math.cos(angle),hy:360+315*Math.sin(angle)}}
+ // 4x5 grid layout: IDs are row-major; links and ports still come from the API.
+ for(const n of topo.switches){const row=Math.floor((n-1)/5),col=(n-1)%5;positions[n]={x:70+175*col,y:80+175*row,hx:120+175*col,hy:130+175*row}}
  const service=services.find(s=>s.id===chosen),active=service&&service.status==='installed',result=shownResult(),longest=edgesOf(result?(result.longest||result.path):[]),shortest=edgesOf(preview?preview.shortest:[]);
  const routeColor=!preview&&active&&service.both_directions_seen_on_all_hops?color('--success'):color('--orange');
- if(topo.switches.length){el('circle',{cx:440,cy:360,r:81,fill:color('--equation-fill'),stroke:color('--line')});el('text',{x:440,y:356,'text-anchor':'middle',fill:color('--accent'),'font-size':23,'font-family':'ui-monospace,monospace','letter-spacing':3},'SDN');el('text',{x:440,y:378,'text-anchor':'middle',fill:color('--muted'),'font-size':11,'font-family':'system-ui'},'OpenFlow 1.3')}
+
  for(const edge of topo.links){const a=positions[edge.src],b=positions[edge.dst];if(!a||!b)continue;const k=[edge.src,edge.dst].sort((a,b)=>a-b).join('-'),selected=longest.has(k);const line=el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:selected?routeColor:color('--edge'),'stroke-width':selected?3.5:1.5,class:'network-edge'+(selected?' selected':'')});const title=document.createElementNS(svg.namespaceURI,'title');title.textContent=`s${edge.src}:端口${edge.src_port} ↔ s${edge.dst}:端口${edge.dst_port}`;line.append(title);if(shortest.has(k))el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:color('--blue'),'stroke-width':2.5,'stroke-dasharray':'7 5',class:'network-edge selected'})}
  for(const host of topo.hosts){const p=positions[host.switch];if(!p)continue;const end=result&&[result.src,result.dst].includes(host.name);el('line',{x1:p.x,y1:p.y,x2:p.hx,y2:p.hy,stroke:end?routeColor:color('--edge'),'stroke-width':end?3:1.3,class:'network-edge'+(end?' selected':'')});el('rect',{x:p.hx-22,y:p.hy-14,width:44,height:28,rx:10,fill:color('--paper'),stroke:end?routeColor:color('--edge'),'stroke-width':end?2:1,class:'host-node'});el('text',{x:p.hx,y:p.hy+5,'text-anchor':'middle',fill:color('--ink'),'font-size':14,'font-family':'ui-monospace,monospace',class:'node-text'},host.name)}
  for(const n of topo.switches){const p=positions[n];el('circle',{cx:p.x,cy:p.y,r:19,fill:color('--primary-fill'),stroke:color('--paper'),'stroke-width':3,class:'switch-node'});el('text',{x:p.x,y:p.y+5,fill:color('--primary-ink'),'text-anchor':'middle','font-size':13,'font-family':'ui-monospace,monospace',class:'node-text'},'s'+n)}

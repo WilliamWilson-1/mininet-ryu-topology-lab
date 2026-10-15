@@ -51,8 +51,12 @@ class PathTests(unittest.TestCase):
             graph[a].add(b)
             graph[b].add(a)
         result = dfs_paths(graph, 1, 20)
-        self.assertEqual(result['shortest'], [1, 20])
-        self.assertEqual(result['longest'], list(range(1, 21)))
+        self.assertEqual(result['shortest'], [1, 2, 3, 4, 5, 10, 15, 20])
+        self.assertEqual(result['shortest_hops'], 7)
+        self.assertEqual(result['simple_path_count'], 976)
+        self.assertEqual(len(config['edges']), 31)
+        self.assertEqual(result['longest'], [1, 2, 3, 4, 5, 10, 9, 8, 7, 6,
+                                             11, 16, 17, 12, 13, 18, 19, 14, 15, 20])
         self.assertEqual(result['longest_hops'], 19)
 
 
