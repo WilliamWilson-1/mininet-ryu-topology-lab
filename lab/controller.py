@@ -1,6 +1,7 @@
 """Teaching controller: LLDP discovery, exact DFS, bidirectional IPv4 flows."""
 import json
 import time
+from collections import deque
 from pathlib import Path
 from ryu.base import app_manager
 from ryu.controller import ofp_event
@@ -35,26 +36,67 @@ class LabController(app_manager.RyuApp):
         self.expected_nodes = set(range(1, config['nodes'] + 1))
         self.expected_edges = {tuple(sorted(edge)) for edge in config['edges']}
         self.next_cookie = 0x20000000
+        # OpenFlow message log exposed to the visualization via GET /api/events.
+        # Named msg_log: `events` is Ryu's internal event queue attribute.
+        self.msg_log = deque(maxlen=3000)
+        # Teaching-critical messages kept for the whole session (survive the
+        # LLDP flood that fills msg_log).
+        self.milestones = deque(maxlen=300)
+        self.next_event = 1
+        self.lldp_windows = {}
+        self.last_stats_event = 0.0
         kwargs['wsgi'].register(LabAPI, {'lab': self})
         self.worker = hub.spawn(self.monitor)
+
+    def emit(self, kind, direction, dpid, summary, detail=None):
+        event = dict(id=self.next_event, t=round(time.time(), 3), kind=kind,
+                     dir=direction, dpid=dpid, summary=summary)
+        if detail is not None:
+            event['detail'] = detail
+        self.msg_log.append(event)
+        if kind in ('connect', 'state', 'host_learn', 'flow_mod', 'flow_del',
+                    'barrier', 'barrier_reply', 'service', 'error', 'topology'):
+            self.milestones.append(event)
+        self.next_event += 1
+
+    def _note_lldp(self, dpid, port):
+        window = self.lldp_windows.get(dpid)
+        if window is None:
+            self.lldp_windows[dpid] = [time.time(), 1]
+        else:
+            window[1] += 1
+
+    def _flush_lldp(self):
+        now = time.time()
+        for dpid, window in list(self.lldp_windows.items()):
+            if now - window[0] >= 2.0:
+                self.emit('lldp', '←', dpid,
+                          's%d 收到邻居 LLDP ×%d(2 秒聚合)' % (dpid, window[1]))
+                del self.lldp_windows[dpid]
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def features(self, ev):
         dp = ev.msg.datapath
         self.dps[dp.id] = dp
+        self.emit('connect', '←', dp.id,
+                  'FeaturesReply:OpenFlow 1.3 握手完成,交换机上线')
         p, o = dp.ofproto_parser, dp.ofproto
         self.flow(dp, 0, p.OFPMatch(),
                   [p.OFPActionOutput(o.OFPP_CONTROLLER, o.OFPCML_NO_BUFFER)])
+        self.emit('flow_mod', '→', dp.id,
+                  'FlowMod table-miss(priority=0):未匹配报文完整送控制器')
 
     @set_ev_cls(ofp_event.EventOFPStateChange, [MAIN_DISPATCHER, DEAD_DISPATCHER])
     def state(self, ev):
         dp = ev.datapath
         if ev.state == MAIN_DISPATCHER:
             self.dps[dp.id] = dp
+            self.emit('state', '←', dp.id, '控制通道进入 MAIN 状态')
         elif self.dps.get(dp.id) is dp:
             self.dps.pop(dp.id, None)
             self.hosts.pop(dp.id, None)
             self.stats.pop(dp.id, None)
+            self.emit('state', '←', dp.id, '控制通道断开,清除该交换机状态')
 
     def flow(self, dp, priority, match, actions, cookie=0, batch=None):
         p, o = dp.ofproto_parser, dp.ofproto
@@ -73,14 +115,26 @@ class LabController(app_manager.RyuApp):
     def packet_in(self, ev):
         msg = ev.msg
         eth = packet.Packet(msg.data).get_protocol(ethernet.ethernet)
-        if not eth or eth.ethertype == ether_types.ETH_TYPE_LLDP:
+        if not eth:
             return
         dpid = msg.datapath.id
+        if eth.ethertype == ether_types.ETH_TYPE_LLDP:
+            self._note_lldp(dpid, msg.match['in_port'])
+            return
         expected = '02:00:00:00:00:%02x' % dpid
         # Learn only actual host-facing packets; never learn a transit port.
         if msg.match['in_port'] == 1 and eth.src == expected:
-            self.hosts[dpid] = dict(name='h%d' % dpid, switch=dpid, port=1,
-                                   mac=eth.src, ip='10.0.0.%d' % dpid)
+            entry = dict(name='h%d' % dpid, switch=dpid, port=1,
+                         mac=eth.src, ip='10.0.0.%d' % dpid)
+            if self.hosts.get(dpid) != entry:
+                self.hosts[dpid] = entry
+                self.emit('host_learn', '←', dpid,
+                          'PacketIn 主机发现:s%d:p1 源 %s → h%d(10.0.0.%d)'
+                          % (dpid, eth.src, dpid, dpid))
+            return
+        self.emit('packet_in', '←', dpid,
+                  'PacketIn s%d:p%d 源 %s 目的 %s(未配置业务,不转发)'
+                  % (dpid, msg.match['in_port'], eth.src, eth.dst))
         # Unconfigured traffic and broadcasts are intentionally not forwarded.
         # Mininet supplies static ARP; configured IPv4 traffic stays in OVS.
 
@@ -109,8 +163,24 @@ class LabController(app_manager.RyuApp):
             self.logger.info('Topology version=%s, switches=%s, links=%s',
                              self.version, len(graph),
                              sum(map(len, graph.values())) // 2)
+            links = sum(map(len, graph.values())) // 2
+            self.emit('topology', '·', 0,
+                      '拓扑指纹变化 → 版本 %d:%d 台交换机 / %d 条链路' %
+                      (self.version, len(graph), links))
+            if self.services:
+                self.emit('topology', '·', 0,
+                          '业务标记 stale,并按 cookie 撤回全部规则')
+            discovered = {(a, b) for a, ports in graph.items()
+                          for b in ports if a < b}
+            if set(graph) == self.expected_nodes \
+                    and discovered == self.expected_edges:
+                self.emit('topology', '·', 0,
+                          '已发现拓扑与 topology.json 完全一致'
+                          '(20 交换机 / 31 链路)')
 
     def remove_cookie(self, cookie):
+        self.emit('flow_del', '→', 0,
+                  'FlowMod DELETE:cookie=0x%x 的规则从全部交换机撤销' % cookie)
         for dp in list(self.dps.values()):
             p, o = dp.ofproto_parser, dp.ofproto
             dp.send_msg(p.OFPFlowMod(datapath=dp, cookie=cookie,
@@ -121,6 +191,7 @@ class LabController(app_manager.RyuApp):
     def monitor(self):
         while True:
             try:
+                self._flush_lldp()
                 self.refresh()
                 for dp in list(self.dps.values()):
                     dp.send_msg(dp.ofproto_parser.OFPFlowStatsRequest(dp))
@@ -137,6 +208,11 @@ class LabController(app_manager.RyuApp):
             previous = dict(xid=ev.msg.xid, rows=[], timestamp=time.time(),
                             complete=False)
             self.stats[dp.id] = previous
+            now = time.time()
+            if now - self.last_stats_event > 1.5:
+                self.last_stats_event = now
+                self.emit('stats', '←', dp.id,
+                          'FlowStatsReply 采样轮开始(各交换机陆续回复)')
         for entry in ev.msg.body:
             if entry.priority == 100:
                 previous['rows'].append(dict(cookie=entry.cookie,
@@ -147,13 +223,19 @@ class LabController(app_manager.RyuApp):
 
     @set_ev_cls(ofp_event.EventOFPBarrierReply, MAIN_DISPATCHER)
     def barrier_reply(self, ev):
-        self.pending_barriers.pop((ev.msg.datapath.id, ev.msg.xid), None)
+        dpid = ev.msg.datapath.id
+        self.pending_barriers.pop((dpid, ev.msg.xid), None)
+        self.emit('barrier_reply', '←', dpid,
+                  'BarrierReply:s%d 在途 FlowMod 已全部处理' % dpid)
 
     @set_ev_cls(ofp_event.EventOFPErrorMsg, [CONFIG_DISPATCHER, MAIN_DISPATCHER])
     def error(self, ev):
         msg = ev.msg
         self.logger.error('OpenFlow error dpid=%s type=%s code=%s xid=%s',
                           msg.datapath.id, msg.type, msg.code, msg.xid)
+        self.emit('error', '←', msg.datapath.id,
+                  'OpenFlow Error type=%s code=%s xid=%s' %
+                  (msg.type, msg.code, msg.xid))
         batch = self.pending_mods.get((msg.datapath.id, msg.xid))
         if batch is not None:
             batch['errors'].append('s%d: type=%d code=%d' %
@@ -216,6 +298,12 @@ class LabController(app_manager.RyuApp):
                                      ipv4_dst='10.0.0.%d' % target)
                         self.flow(dp, 100, match, [p.OFPActionOutput(outgoing)],
                                   cookie, batch)
+                        self.emit('flow_mod', '→', node,
+                                  'FlowMod s%d:in_port=%d,ipv4_src=%s,'
+                                  'ipv4_dst=%s → output:%d' %
+                                  (node, incoming, '10.0.0.%d' % source,
+                                   '10.0.0.%d' % target, outgoing),
+                                  'priority=100 cookie=0x%x' % cookie)
                 for node in path:
                     dp = self.dps[node]
                     msg = dp.ofproto_parser.OFPBarrierRequest(dp)
@@ -224,6 +312,8 @@ class LabController(app_manager.RyuApp):
                     self.pending_barriers[barrier_key] = True
                     batch['barriers'].append(barrier_key)
                     dp.send_msg(msg)
+                    self.emit('barrier', '→', node,
+                              'BarrierRequest s%d(xid=%d)' % (node, msg.xid))
                 deadline = time.monotonic() + 3
                 while any(k in self.pending_barriers for k in batch['barriers']):
                     if batch['errors']:
@@ -239,6 +329,9 @@ class LabController(app_manager.RyuApp):
                 service = dict(result, id=key, cookie=cookie, status='installed',
                                path=path, created_at=time.time())
                 self.services[key] = service
+                self.emit('service', '·', 0,
+                          '业务 %s 下发完成:%d 跳最长路、40 条 FlowMod、'
+                          '20 条 Barrier 全部收到回复' % (key, len(path) - 1))
                 return service
             except Exception:
                 self.remove_cookie(cookie)
@@ -322,6 +415,35 @@ class LabAPI(ControllerBase):
             return self.response({'error': str(exc), 'exact': False}, 422)
         except (ValueError, KeyError) as exc:
             return self.response({'error': str(exc)}, 400)
+
+    @route('lab_events', '/api/events', methods=['GET'])
+    def events(self, req, **kwargs):
+        try:
+            since = max(0, int(req.params.get('since') or 0))
+        except ValueError:
+            since = 0
+        try:
+            limit = max(1, min(int(req.params.get('limit') or 200), 500))
+        except ValueError:
+            limit = 200
+        kinds = {k for k in (req.params.get('type') or '').split(',') if k}
+        buffered = {e['id']: e for e in
+                    list(self.lab.msg_log) + list(self.lab.milestones)}
+        recent = [buffered[i] for i in sorted(buffered) if i > since]
+        # Keep session milestones (teaching highlights) inside the cap first.
+        milestone_ids = {e['id'] for e in self.lab.milestones}
+        picks = [e for e in recent if e['id'] in milestone_ids]
+        rest = [e for e in recent if e['id'] not in milestone_ids]
+        if kinds:
+            picks = [e for e in picks if e['kind'] in kinds]
+            rest = [e for e in rest if e['kind'] in kinds]
+        room = limit - len(picks)
+        if room > 0:
+            picks = picks + rest[-room:]
+        items = sorted(picks, key=lambda e: e['id'])
+        return self.response({'events': items,
+                              'last_id': items[-1]['id'] if items else since,
+                              'total_buffered': len(buffered)})
 
     @route('lab_ui', '/', methods=['GET'])
     def index(self, req, **kwargs):
