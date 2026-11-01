@@ -8,10 +8,18 @@
 
 | 入口 | 可以做什么 | 数据来源 |
 | --- | --- | --- |
-| [GitHub Pages 在线预览](https://williamwilson-1.github.io/mininet-ryu-topology-lab/) | 查看界面、拓扑、路径、业务展示；配置按钮禁用 | 模拟快照，始终标注“演示预览” |
+| [GitHub Pages 在线预览](https://williamwilson-1.github.io/mininet-ryu-topology-lab/) | 任选两台主机计算最短/最长简单路径，查看拓扑与示例业务；流表配置禁用 | 示例网格 + 浏览器本地 DFS，始终标注“演示模式” |
 | Linux 控制器页面 `http://127.0.0.1:8080/` | 发现真实拓扑、计算路径、配置最长路、读取 OVS 计数 | 本机 Mininet + Ryu |
 
 GitHub Pages 只托管静态 HTML，不能启动 Linux 进程或连接你的虚拟机。要完成实验，必须运行 Linux 端，再打开控制器提供的页面；不需要把虚拟机 API 暴露到公网。跨电脑访问方式见手册的 SSH 隧道部分。
+
+## 任意主机对的演示计算
+
+打开 [交互演示](https://williamwilson-1.github.io/mininet-ryu-topology-lab/?demo=1)，选择 h1～h20 中任意两台不同主机，点击“计算路径”。也可以交换源/目的，再次计算；在“路径分析”查看完整序列、跳数及简单路径数量。
+
+演示模式在浏览器中以 DFS + 回溯完整枚举指定 4×5 示例网格的简单路径，无需 Ryu、Mininet、登录或后端 API。h1→h20 为 7/19 跳、976 条路径；其他主机对按实际搜索结果显示。同一主机不可作为两端，搜索超限会报错，不显示部分最优解。
+
+真实控制器页面同样支持加 `?demo=1` 临时进入本地演示。GitHub Pages 默认启用演示；Linux 页面不带此参数时仍使用真实 API。演示只计算与展示，不安装流表，不作为联网实验验收依据。
 
 ## 指定拓扑
 
@@ -48,6 +56,7 @@ s16── s17── s18── s19── s20
     ├── topo20.py             # 创建交换机、主机、链路与静态 ARP
     ├── paths.py              # DFS、回溯、搜索预算
     ├── test_paths.py         # BFS / 小图穷举交叉验证与指定网格回归
+    ├── test_demo_paths.py    # 可选 Node 检查：两份页面的全部主机对与 Python 一致
     ├── controller.py         # LLDP、主机发现、REST、双向流表、统计
     └── static/index.html     # 真实控制器页面，默认请求同源 API
 ```
@@ -125,3 +134,5 @@ python3 -m unittest -v test_paths.py
 ```
 
 测试使用 BFS 验证最短路，以小图排列穷举验证最长路和简单路径数量，并核对指定网格的 7/19 跳与 976 条路径。**这些检查不等于 Linux/OVS 端到端验收**；实际交换机连接、Barrier、ping 和统计必须按实验手册在 Linux 中验证。
+
+浏览器演示算法还提供可选一致性检查（需本机安装 Node；不影响网页使用）：在 `lab` 中执行 `python3 -m unittest -v test_demo_paths.py`，核对两份页面全部 380 个有向主机对的路径、跳数和路径数量，并以 BFS 独立核对最短跳数。未安装 Node 时该项会跳过。

@@ -549,10 +549,10 @@ ssh -N -L 18080:127.0.0.1:8080 ubuntu@192.168.1.100
 
 ### 11.3 区分演示页和实验页
 
-- `https://williamwilson-1.github.io/mininet-ryu-topology-lab/`：Pages 演示，永远是模拟模式，配置按钮禁用。
+- `https://williamwilson-1.github.io/mininet-ryu-topology-lab/`：Pages 演示，默认启用演示模式，可任选不同主机计算路径，流表配置按钮禁用。
 - `http://127.0.0.1:8080/`：Linux 的真实 Ryu 页面。
 - `http://127.0.0.1:18080/`：本机经 SSH 隧道访问同一个真实页面。
-- `lab/static/index.html` 加 `?demo=1`：人为进入模拟模式，不能据此验收实验。
+- `lab/static/index.html` 加 `?demo=1`：进入本地演示模式，可任选不同主机计算路径，无需控制器；不能据此验收真实联网实验。
 
 不要直接双击 HTML 使用 `file://`，也不要用 `python -m http.server` 期待它提供 Ryu REST API。GitHub Pages 的 HTTPS 页面不能直接代替本地 HTTP 控制器页面；本项目使用控制器同源页面规避额外的跨域配置。
 
@@ -743,7 +743,7 @@ py net.staticArp()
 
 ### 15.7 页面显示演示或配置按钮禁用
 
-确认地址是 Ryu 的 HTTP 页面而非 github.io，移除 `?demo=1`，检查右上角是否连接。选择两台不同主机；相同主机按钮会禁用。不要把 `docs/index.html` 复制到真实 static 目录，因为它带强制模拟元标记。
+若要配置真实业务，确认地址是 Ryu 的 HTTP 页面而非 github.io，移除 `?demo=1`，检查右上角是否连接。演示模式允许选择不同主机并计算路径，但不能配置流表。选择两台不同主机；相同主机的计算按钮会禁用。不要把 `docs/index.html` 复制到真实 static 目录，因为它带强制模拟元标记。
 
 ### 15.8 页面能打开，但没有实时数据
 
