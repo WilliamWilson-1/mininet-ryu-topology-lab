@@ -2,7 +2,7 @@
 
 一个可以在 Linux 上复用的 SDN 实验：**20 台 OpenFlow 交换机、20 台主机、4×5 网格、31 条交换机间链路**。使用 LLDP 发现链路和两端端口，以 DFS 穷举简单路径，计算最短路与最长路，再沿最长路下发双向 IPv4 流表，通过深蓝色前端页面展示拓扑、业务及每跳计数。
 
-**第一次使用，请从 [完整实验手册](lab/README.md) 的第 1 节开始。** 手册包含安装、Python 3.10 兼容修复、三个终端的启动顺序、命令预期输出、页面操作、验收和排错；直接从 Git 克隆源码即可，不需要压缩包。
+**Project 2 的安装、广播配置和抓包验证见 [Kruskal 广播操作手册](lab/README.md)。** 下方为 Project 1 的单播实验概览。
 
 ## 两种使用方式
 
@@ -61,7 +61,7 @@ s16── s17── s18── s19── s20
     └── static/index.html     # 真实控制器页面，默认请求同源 API
 ```
 
-仓库以 `controller.py` 作为完整运行入口。各步骤与实际代码的对应关系见 [手册第 14 节](lab/README.md#14-按代码理解实验原理)。
+仓库以 `controller.py` 作为完整运行入口。各步骤与实际代码的对应关系见 [手册第 14 节](https://github.com/WilliamWilson-1/mininet-ryu-topology-lab/blob/project1/lab/README.md#14-按代码理解实验原理)。
 
 ## 环境准备后的日常启动
 
@@ -114,7 +114,7 @@ h1 ping -c 5 h20
 - 链路变化后业务标为 `stale` 并撤回；当前实现要求发现结果与 `topology.json` 完整一致，恢复链路后需要重新配置，不提供自动故障绕行。
 - 每次重启实验应先退出旧 Mininet、停止旧 Ryu，再 `sudo mn -c`，避免旧流表与新控制器记录混用。
 
-详细检查与常见问题：[验收清单](lab/README.md#12-实验验收与证据保存) · [排错](lab/README.md#15-常见问题逐项排查) · [REST 接口](lab/README.md#13-rest-接口说明)。
+详细检查与常见问题：[验收清单](https://github.com/WilliamWilson-1/mininet-ryu-topology-lab/blob/project1/lab/README.md#12-实验验收与证据保存) · [排错](https://github.com/WilliamWilson-1/mininet-ryu-topology-lab/blob/project1/lab/README.md#15-常见问题逐项排查) · [REST 接口](https://github.com/WilliamWilson-1/mininet-ryu-topology-lab/blob/project1/lab/README.md#13-rest-接口说明)。
 
 ## 本地开发与验证
 
