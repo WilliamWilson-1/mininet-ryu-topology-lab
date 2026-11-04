@@ -1,4 +1,4 @@
-"""Teaching controller: LLDP discovery, exact DFS, bidirectional IPv4 flows."""
+"""Teaching controller: LLDP discovery, exact DFS, bidirectional IPv4 and MST broadcast flows."""
 import json
 import time
 from collections import deque
@@ -14,6 +14,8 @@ from ryu.topology.api import get_switch, get_link
 from ryu.app.wsgi import WSGIApplication, ControllerBase, route
 from webob import Response
 from paths import dfs_paths, SearchLimit
+from broadcast import (broadcast_plan, BROADCAST_COOKIE, BROADCAST_COOKIE_MASK,
+                       BROADCAST_MAC, BROADCAST_IP, BROADCAST_PORT, BROADCAST_PRIORITY)
 
 
 class LabController(app_manager.RyuApp):
@@ -28,6 +30,7 @@ class LabController(app_manager.RyuApp):
         self.fingerprint = None
         self.version = 0
         self.services = {}
+        self.broadcast = None
         self.stats = {}
         self.pending_barriers = {}
         self.pending_mods = {}
@@ -78,6 +81,8 @@ class LabController(app_manager.RyuApp):
     def features(self, ev):
         dp = ev.msg.datapath
         self.dps[dp.id] = dp
+        self.invalidate_broadcast('交换机重新连接，请重新配置')
+        self.delete_flows(dp, BROADCAST_COOKIE, BROADCAST_COOKIE_MASK)
         self.emit('connect', '←', dp.id,
                   'FeaturesReply:OpenFlow 1.3 握手完成,交换机上线')
         p, o = dp.ofproto_parser, dp.ofproto
@@ -96,6 +101,7 @@ class LabController(app_manager.RyuApp):
             self.dps.pop(dp.id, None)
             self.hosts.pop(dp.id, None)
             self.stats.pop(dp.id, None)
+            self.invalidate_broadcast('交换机断开，请重新配置')
             self.emit('state', '←', dp.id, '控制通道断开,清除该交换机状态')
 
     def flow(self, dp, priority, match, actions, cookie=0, batch=None):
@@ -135,7 +141,7 @@ class LabController(app_manager.RyuApp):
         self.emit('packet_in', '←', dpid,
                   'PacketIn s%d:p%d 源 %s 目的 %s(未配置业务,不转发)'
                   % (dpid, msg.match['in_port'], eth.src, eth.dst))
-        # Unconfigured traffic and broadcasts are intentionally not forwarded.
+        # Unconfigured traffic is intentionally not forwarded.
         # Mininet supplies static ARP; configured IPv4 traffic stays in OVS.
 
     def refresh(self):
@@ -155,6 +161,7 @@ class LabController(app_manager.RyuApp):
             self.graph = graph
             self.fingerprint = signature
             self.version += 1
+            self.invalidate_broadcast('拓扑变化，请重新配置')
             for service in self.services.values():
                 if service['status'] != 'stale':
                     self.remove_cookie(service['cookie'])
@@ -182,11 +189,22 @@ class LabController(app_manager.RyuApp):
         self.emit('flow_del', '→', 0,
                   'FlowMod DELETE:cookie=0x%x 的规则从全部交换机撤销' % cookie)
         for dp in list(self.dps.values()):
-            p, o = dp.ofproto_parser, dp.ofproto
-            dp.send_msg(p.OFPFlowMod(datapath=dp, cookie=cookie,
-                        cookie_mask=0xffffffffffffffff, table_id=o.OFPTT_ALL,
-                        command=o.OFPFC_DELETE, out_port=o.OFPP_ANY,
-                        out_group=o.OFPG_ANY, match=p.OFPMatch()))
+            self.delete_flows(dp, cookie)
+
+    @staticmethod
+    def delete_flows(dp, cookie, mask=0xffffffffffffffff):
+        p, o = dp.ofproto_parser, dp.ofproto
+        dp.send_msg(p.OFPFlowMod(datapath=dp, cookie=cookie,
+                    cookie_mask=mask, table_id=o.OFPTT_ALL,
+                    command=o.OFPFC_DELETE, out_port=o.OFPP_ANY,
+                    out_group=o.OFPG_ANY, match=p.OFPMatch()))
+
+    def invalidate_broadcast(self, reason):
+        service = self.broadcast
+        if service and service['status'] == 'installed':
+            service.update(status='stale', reason=reason)
+            self.remove_cookie(int(service['cookie'], 16))
+            self.emit('service', '·', 0, '广播业务撤回。' + reason)
 
     def monitor(self):
         while True:
@@ -214,7 +232,7 @@ class LabController(app_manager.RyuApp):
                 self.emit('stats', '←', dp.id,
                           'FlowStatsReply 采样轮开始(各交换机陆续回复)')
         for entry in ev.msg.body:
-            if entry.priority == 100:
+            if entry.priority in (100, BROADCAST_PRIORITY):
                 previous['rows'].append(dict(cookie=entry.cookie,
                     src=entry.match.get('ipv4_src'), packets=entry.packet_count,
                     bytes=entry.byte_count))
@@ -249,12 +267,14 @@ class LabController(app_manager.RyuApp):
             raise ValueError('主机范围为 h1 到 h20')
         return number
 
-    def compute(self, src, dst):
+    def require_full_topology(self):
         self.refresh()
         discovered = {(a, b) for a, ports in self.graph.items()
                       for b in ports if a < b}
         if set(self.graph) != self.expected_nodes or discovered != self.expected_edges:
             raise ValueError('已发现拓扑与 topology.json 尚未完全一致，请等待 LLDP 收敛或检查链路')
+    def compute(self, src, dst):
+        self.require_full_topology()
         a, b = self.host_id(src), self.host_id(dst)
         if a == b:
             raise ValueError('请选择两个不同主机')
@@ -304,25 +324,7 @@ class LabController(app_manager.RyuApp):
                                   (node, incoming, '10.0.0.%d' % source,
                                    '10.0.0.%d' % target, outgoing),
                                   'priority=100 cookie=0x%x' % cookie)
-                for node in path:
-                    dp = self.dps[node]
-                    msg = dp.ofproto_parser.OFPBarrierRequest(dp)
-                    dp.set_xid(msg)
-                    barrier_key = (node, msg.xid)
-                    self.pending_barriers[barrier_key] = True
-                    batch['barriers'].append(barrier_key)
-                    dp.send_msg(msg)
-                    self.emit('barrier', '→', node,
-                              'BarrierRequest s%d(xid=%d)' % (node, msg.xid))
-                deadline = time.monotonic() + 3
-                while any(k in self.pending_barriers for k in batch['barriers']):
-                    if batch['errors']:
-                        raise ValueError('; '.join(batch['errors']))
-                    if time.monotonic() > deadline:
-                        raise ValueError('等待 OpenFlow Barrier 超时')
-                    hub.sleep(0.01)
-                if batch['errors']:
-                    raise ValueError('; '.join(batch['errors']))
+                self.confirm_flows((self.dps[node] for node in path), batch)
                 self.refresh()
                 if result['topology_version'] != self.version:
                     raise ValueError('下发期间拓扑发生变化')
@@ -337,10 +339,98 @@ class LabController(app_manager.RyuApp):
                 self.remove_cookie(cookie)
                 raise
             finally:
-                for k in batch['mods']:
-                    self.pending_mods.pop(k, None)
-                for k in batch['barriers']:
-                    self.pending_barriers.pop(k, None)
+                self.clear_batch(batch)
+
+    def confirm_flows(self, datapaths, batch):
+        for dp in datapaths:
+            msg = dp.ofproto_parser.OFPBarrierRequest(dp)
+            dp.set_xid(msg)
+            key = (dp.id, msg.xid)
+            self.pending_barriers[key] = True
+            batch['barriers'].append(key)
+            dp.send_msg(msg)
+            self.emit('barrier', '→', dp.id,
+                      'BarrierRequest s%d(xid=%d)' % key)
+        deadline = time.monotonic() + 3
+        while any(key in self.pending_barriers for key in batch['barriers']):
+            if batch['errors']:
+                break
+            if time.monotonic() > deadline:
+                raise ValueError('等待 OpenFlow Barrier 超时')
+            hub.sleep(0.01)
+        if batch['errors']:
+            raise ValueError('；'.join(batch['errors']))
+
+    def clear_batch(self, batch):
+        for key in batch['mods']:
+            self.pending_mods.pop(key, None)
+        for key in batch['barriers']:
+            self.pending_barriers.pop(key, None)
+
+    def install_broadcast(self, src):
+        with self.lock:
+            self.require_full_topology()
+            source = self.host_id(src)
+            if self.expected_nodes - self.hosts.keys():
+                raise ValueError('请等待全部主机通过 PacketIn 被发现')
+            version = self.version
+            datapaths = {node: self.dps[node] for node in self.graph}
+            plan = broadcast_plan(self.graph, self.hosts, source)
+            host = self.hosts[source]
+            self.next_cookie += 1
+            cookie = BROADCAST_COOKIE | (self.next_cookie & 0xffffffff)
+            self.invalidate_broadcast('正在重新配置广播')
+            batch = dict(mods=[], barriers=[], errors=[])
+            try:
+                root, *downstream = plan['rules']
+                for stage in (downstream, [root]):
+                    for rule in stage:
+                        dp = datapaths[rule['switch']]
+                        p = dp.ofproto_parser
+                        match = p.OFPMatch(
+                            in_port=rule['in_port'], eth_src=host['mac'],
+                            eth_dst=BROADCAST_MAC, eth_type=ether_types.ETH_TYPE_IP,
+                            ipv4_src=host['ip'], ipv4_dst=BROADCAST_IP,
+                            ip_proto=17, udp_dst=BROADCAST_PORT)
+                        self.flow(dp, BROADCAST_PRIORITY, match,
+                                  [p.OFPActionOutput(port) for port in rule['out_ports']],
+                                  cookie, batch)
+                        self.emit('flow_mod', '→', dp.id,
+                                  '广播 FlowMod s%d:p%d → %s' %
+                                  (dp.id, rule['in_port'], rule['out_ports']),
+                                  'priority=%d cookie=0x%x' % (BROADCAST_PRIORITY, cookie))
+                    self.confirm_flows((datapaths[rule['switch']] for rule in stage), batch)
+                    self.refresh()
+                    if version != self.version or any(self.dps.get(node) is not dp
+                                                      for node, dp in datapaths.items()):
+                        raise ValueError('下发期间拓扑或交换机连接发生变化')
+                self.broadcast = dict(plan, topology_version=version,
+                                      cookie='0x%x' % cookie, status='installed')
+                self.emit('service', '·', 0, '%s 广播已配置，覆盖 %d 台接收主机' %
+                          (plan['src'], len(plan['receivers'])))
+                return self.broadcast_status()
+            except Exception:
+                self.remove_cookie(cookie)
+                raise
+            finally:
+                self.clear_batch(batch)
+
+    def broadcast_status(self):
+        service = self.broadcast
+        if service is None:
+            return None
+        now = time.time()
+        cookie = int(service['cookie'], 16)
+        counters = []
+        for rule in service['rules']:
+            data = self.stats.get(rule['switch'], {})
+            fresh = data.get('complete', False) and now - data.get('timestamp', 0) < 6
+            row = next((row for row in data['rows'] if row['cookie'] == cookie), None) if fresh else None
+            counters.append(dict(switch=rule['switch'], fresh=fresh, present=row is not None,
+                                 packets=row['packets'] if row else 0))
+        seen = service['status'] == 'installed' and all(
+            row['fresh'] and row['present'] and row['packets'] > 0 for row in counters)
+        return dict(service, counters=counters, all_switches_seen=seen)
 
     def topology(self):
         self.refresh()
@@ -413,6 +503,20 @@ class LabAPI(ControllerBase):
             return self.response(service)
         except SearchLimit as exc:
             return self.response({'error': str(exc), 'exact': False}, 422)
+        except (ValueError, KeyError) as exc:
+            return self.response({'error': str(exc)}, 400)
+
+    @route('lab_broadcast', '/api/broadcast', methods=['GET'])
+    def broadcast(self, req, **kwargs):
+        return self.response({'service': self.lab.broadcast_status()})
+
+    @route('lab_install_broadcast', '/api/broadcast', methods=['POST'])
+    def install_broadcast(self, req, **kwargs):
+        try:
+            data = req.json
+            if not isinstance(data, dict) or 'src' not in data:
+                raise ValueError('请提供源主机 src')
+            return self.response({'service': self.lab.install_broadcast(data['src'])})
         except (ValueError, KeyError) as exc:
             return self.response({'error': str(exc)}, 400)
 

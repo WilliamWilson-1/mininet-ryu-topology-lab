@@ -101,6 +101,15 @@
 [data-transparency=reduced] .glass{background:var(--paper);backdrop-filter:none;-webkit-backdrop-filter:none}[data-transparency=reduced] .glass::after{display:none}[data-transparency=reduced] .tab-thumb{background:var(--soft);backdrop-filter:none;-webkit-backdrop-filter:none}[data-transparency=reduced] .drawer::backdrop{backdrop-filter:none}[data-transparency=reduced] .global-glow{display:none}@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.glass{background:var(--paper)}.tab-thumb{background:var(--soft)}}
 @media(hover:none),(pointer:coarse){.global-glow{display:none}.glass{--spot-x:-300px!important;--spot-y:-300px!important}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition:none!important}.button:active{transform:none}.global-glow{display:none}.glass{--spot-x:-300px!important;--spot-y:-300px!important}}@media(prefers-contrast:more){:root{--muted:var(--ink);--line:currentColor}.glass{background:var(--paper);backdrop-filter:none;-webkit-backdrop-filter:none}.glass::after,.global-glow{display:none}.glass{--spot-x:-300px!important;--spot-y:-300px!important}}@media(forced-colors:active){.glass,.content,.badge,.tag,.button,.tab-thumb{background:Canvas;color:CanvasText;border:1px solid CanvasText;box-shadow:none;backdrop-filter:none}.glass::after,.glass::before,.global-glow,body::before{display:none}.tab[aria-selected=true],.nav-button.active{color:Highlight}.tab-thumb{border:2px solid Highlight}.graph-stage{background:none}.network-edge{stroke:CanvasText}.network-edge.selected{stroke:Highlight}.switch-node,.host-node{fill:Canvas;stroke:CanvasText}.node-text{fill:CanvasText}}
 .button.primary:disabled{background:var(--group-fill);border:1px solid var(--line);color:var(--muted)}.canvas-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 24px 0}.canvas-toolbar p{font-size:11px;color:var(--muted)}.zoom-controls{display:flex;align-items:center;border-radius:999px;padding:2px;flex:none}.zoom-controls button{min-height:44px;min-width:44px;border-radius:999px;color:var(--accent);font-size:18px}.zoom-controls button:hover{background:var(--hover-fill)}.zoom-controls #zoom-reset{font-size:11px;min-width:54px}.graph-stage{overflow:auto;max-height:720px;overscroll-behavior:contain}.graph-stage svg{max-height:none}.canvas-toolbar{background:none}@media(max-width:600px){.canvas-toolbar{padding:12px 20px 0}.canvas-toolbar p{max-width:85px}}
+
+.broadcast-card{margin-bottom:18px;padding:16px 20px}
+.broadcast-controls{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:10px 0}
+.broadcast-controls .field{min-width:110px;max-width:170px}
+.broadcast-card details{margin-top:10px}
+.broadcast-card .table-wrap{margin-top:8px;max-height:360px;overflow:auto}
+.broadcast-receivers{overflow-wrap:anywhere}
+.legend-stroke.broadcast-tree{background:var(--blue)}
+.legend-stroke.broadcast-source{background:var(--orange)}
 </style></head>
 <body>
 <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"><defs>
@@ -121,7 +130,22 @@
 <div class="view-tabs glass" id="tabs" role="tablist" aria-label="实验视图"><span class="tab-thumb" aria-hidden="true" id="tab-thumb"></span><button class="tab" id="tab-topology" role="tab" aria-selected="true" aria-controls="panel-topology" data-view="topology"><svg class="icon" aria-hidden="true"><use href="#i-network"/></svg>网络拓扑</button><button class="tab" id="tab-paths" role="tab" aria-selected="false" aria-controls="panel-paths" tabindex="-1" data-view="paths"><svg class="icon" aria-hidden="true"><use href="#i-route"/></svg>路径分析</button><button class="tab" id="tab-services" role="tab" aria-selected="false" aria-controls="panel-services" tabindex="-1" data-view="services"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>业务监测</button></div>
 <form class="planner glass" id="planner"><div class="field"><label for="src">源主机</label><select id="src"></select></div><button type="button" class="icon-button swap-button" id="swap" aria-label="交换源主机与目的主机"><svg class="icon" aria-hidden="true"><use href="#i-swap"/></svg></button><div class="field"><label for="dst">目的主机</label><select id="dst"></select></div><button type="submit" class="button" id="search"><svg class="icon" aria-hidden="true"><use href="#i-route"/></svg><span>计算路径</span></button><button type="button" class="button primary" id="install"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg><span>配置最长路</span></button></form>
 <div class="feedback" id="feedback" hidden><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><p id="message" role="status" aria-live="polite"></p></div>
-<section id="panel-topology" class="panel" role="tabpanel" aria-labelledby="tab-topology" tabindex="0"><div class="topology-layout"><article class="graph-card content"><div class="panel-head"><div><h2>网络拓扑</h2><p id="graph-subtitle">正在等待控制器返回拓扑</p></div><span class="badge mono" id="topology-version">V —</span></div><div class="graph-stage"><svg id="graph" viewBox="0 0 880 720" role="img" aria-label="网络拓扑与通信路径"></svg><div class="empty" id="graph-empty"><svg class="icon" style="width:36px;height:36px" aria-hidden="true"><use href="#i-network"/></svg><strong id="empty-title">正在发现网络</strong><p id="empty-copy">等待 Ryu 返回交换机、主机与链路。</p><button class="button" id="retry">重新连接</button></div></div><div class="graph-caption"><span class="legend-item"><i class="legend-stroke"></i>网络链路</span><span class="legend-item"><i class="legend-stroke short"></i>最短路</span><span class="legend-item"><i class="legend-stroke long"></i>最长路 / 已配置</span><span class="legend-item"><i class="legend-stroke seen"></i>各跳双向计数已验证</span></div></article><aside class="inspector content" aria-label="当前路径概要"><div class="section-label">当前主机对<span class="tag" id="route-status">未计算</span></div><div class="endpoint-pair"><div class="endpoint"><strong class="mono" id="endpoint-src">h1</strong><small id="endpoint-src-ip">10.0.0.1</small></div><svg class="icon muted" aria-hidden="true"><use href="#i-arrow"/></svg><div class="endpoint"><strong class="mono" id="endpoint-dst">h20</strong><small id="endpoint-dst-ip">10.0.0.20</small></div></div><div class="route-summary"><div class="route-label"><i class="legend-stroke short"></i>最短路<strong class="mono" id="short-hops">—</strong><span>跳</span></div><p class="route-line" id="short-preview">计算后查看最短路径。</p></div><div class="route-summary"><div class="route-label"><i class="legend-stroke long"></i>最长路<strong class="mono" id="long-hops">—</strong><span>跳</span></div><p class="route-line" id="long-preview">计算后查看最长简单路径。</p></div><p class="inspector-note" id="path-note">路径不重复经过交换机。跳数仅统计交换机间链路，主机间总链路数需加 2。</p><button class="button" id="view-analysis">查看完整路径<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></aside></div><div class="section-footer"><span id="info" role="status" aria-live="polite">正在连接控制器…</span><button id="refresh" type="button">刷新数据 ↻</button></div></section>
+<section id="panel-topology" class="panel" role="tabpanel" aria-labelledby="tab-topology" tabindex="0">
+<article class="broadcast-card content" aria-labelledby="broadcast-title">
+  <div class="section-label"><h2 id="broadcast-title">Project 2 · Kruskal 广播</h2><span class="tag" id="broadcast-state">未配置</span></div>
+  <form class="broadcast-controls" id="broadcast-form">
+    <div class="field"><label for="broadcast-src">广播源主机</label><select id="broadcast-src"></select></div>
+    <button type="submit" class="button primary" id="broadcast-install">配置广播树</button>
+    <button type="button" class="button" id="broadcast-view" aria-pressed="false" disabled>显示广播树</button>
+  </form>
+  <p class="muted" id="broadcast-summary" role="status"></p>
+  <p class="mono broadcast-receivers" id="broadcast-receivers"></p>
+  <details id="broadcast-details" hidden>
+    <summary>查看各交换机的入端口、出端口和命中计数</summary>
+    <div class="table-wrap"><table><thead><tr><th>交换机</th><th>入端口</th><th>出端口</th><th>命中报文</th></tr></thead><tbody id="broadcast-rules"></tbody></table></div>
+  </details>
+</article>
+<div class="topology-layout"><article class="graph-card content"><div class="panel-head"><div><h2>网络拓扑</h2><p id="graph-subtitle">正在等待控制器返回拓扑</p></div><span class="badge mono" id="topology-version">V —</span></div><div class="graph-stage"><svg id="graph" viewBox="0 0 880 720" role="img" aria-label="网络拓扑与通信路径"></svg><div class="empty" id="graph-empty"><svg class="icon" style="width:36px;height:36px" aria-hidden="true"><use href="#i-network"/></svg><strong id="empty-title">正在发现网络</strong><p id="empty-copy">等待 Ryu 返回交换机、主机与链路。</p><button class="button" id="retry">重新连接</button></div></div><div class="graph-caption" id="unicast-legend"><span class="legend-item"><i class="legend-stroke"></i>网络链路</span><span class="legend-item"><i class="legend-stroke short"></i>最短路</span><span class="legend-item"><i class="legend-stroke long"></i>最长路 / 已配置</span><span class="legend-item"><i class="legend-stroke seen"></i>各跳双向计数已验证</span></div><div class="graph-caption" id="broadcast-legend" hidden><span class="legend-item"><i class="legend-stroke"></i>物理链路</span><span class="legend-item"><i class="legend-stroke broadcast-tree"></i>广播树方向与接收主机</span><span class="legend-item"><i class="legend-stroke broadcast-source"></i>源主机</span></div></article><aside class="inspector content" aria-label="当前路径概要"><div class="section-label">当前主机对<span class="tag" id="route-status">未计算</span></div><div class="endpoint-pair"><div class="endpoint"><strong class="mono" id="endpoint-src">h1</strong><small id="endpoint-src-ip">10.0.0.1</small></div><svg class="icon muted" aria-hidden="true"><use href="#i-arrow"/></svg><div class="endpoint"><strong class="mono" id="endpoint-dst">h20</strong><small id="endpoint-dst-ip">10.0.0.20</small></div></div><div class="route-summary"><div class="route-label"><i class="legend-stroke short"></i>最短路<strong class="mono" id="short-hops">—</strong><span>跳</span></div><p class="route-line" id="short-preview">计算后查看最短路径。</p></div><div class="route-summary"><div class="route-label"><i class="legend-stroke long"></i>最长路<strong class="mono" id="long-hops">—</strong><span>跳</span></div><p class="route-line" id="long-preview">计算后查看最长简单路径。</p></div><p class="inspector-note" id="path-note">路径不重复经过交换机。跳数仅统计交换机间链路，主机间总链路数需加 2。</p><button class="button" id="view-analysis">查看完整路径<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button></aside></div><div class="section-footer"><span id="info" role="status" aria-live="polite">正在连接控制器…</span><button id="refresh" type="button">刷新数据 ↻</button></div></section>
 <section id="panel-paths" class="panel" role="tabpanel" aria-labelledby="tab-paths" tabindex="0" hidden><div class="analysis-empty content" id="analysis-empty"><h2>从一对主机开始</h2><p>选择两个主机，点击“计算路径”比较最短路与最长简单路径。</p></div><div id="comparison" hidden><div class="comparison-grid"><article class="comparison content"><p class="eyebrow">SHORTEST PATH / 最短路</p><h2>用更少的跳数到达</h2><div class="hop-value mono"><span id="analysis-short" style="font-size:48px;color:var(--ink);margin:0">—</span><span>交换机间跳数</span></div><div class="path-chips" id="short-chips"></div></article><article class="comparison content"><p class="eyebrow">LONGEST SIMPLE PATH / 最长简单路径</p><h2>不重复节点的最长旅程</h2><div class="hop-value mono"><span id="analysis-long" style="font-size:48px;color:var(--ink);margin:0">—</span><span>交换机间跳数</span></div><div class="path-chips" id="long-chips"></div></article></div><div class="analysis-note content"><p id="analysis-evidence"></p><p id="analysis-next" style="margin-top:8px">计算完成后，点击上方“配置最长路”建立双向通信。流表下发后仍需通过 ping 与各跳计数验证。</p></div></div></section>
 <section id="panel-services" class="panel" role="tabpanel" aria-labelledby="tab-services" tabindex="0" hidden><div class="panel-head" style="padding:0"><div><h2>已配置业务</h2><p>沿路径查看每台交换机的双向流量证据。</p></div><span class="badge" id="service-count">0 项业务</span></div><div class="filter-bar"><label class="filter-wrap glass" for="service-search"><svg class="icon muted" aria-hidden="true"><use href="#i-search"/></svg><input class="filter-input" id="service-search" type="search" placeholder="搜索主机，例如 h1 或 h20" aria-label="搜索主机业务"></label><select class="filter-state glass" id="service-state" aria-label="筛选业务状态"><option value="all">全部状态</option><option value="installed">已配置</option><option value="seen">计数已验证</option><option value="stale">拓扑已变化</option></select><button class="button" id="clear-filter" hidden>清除筛选</button></div><div class="service-list" id="services"></div><p class="services-note">每 2 秒刷新。绿色表示近期读取的累计计数证据，不代表此刻持续发送；端到端通信请以 ping 验证。</p></section>
 <footer class="page-footer"><span>Mininet × Ryu · 最长简单路径实验</span><span id="update-time" class="mono">等待数据</span></footer></main></div>
@@ -210,20 +234,120 @@ function renderInspector(){
  text('analysis-next',demo?'可切换任意两台不同主机，再次计算并比较路径。演示计算在浏览器本地完成，不下发流表。':'计算完成后，点击上方“配置最长路”建立双向通信。流表下发后仍需通过 ping 与各跳计数验证。');
  if(result){text('analysis-short',result.shortest_hops);text('analysis-long',result.longest_hops);chips('short-chips',result.shortest);chips('long-chips',longest);text('analysis-evidence',(demo?'示例网格 · 浏览器精确 DFS · ':'精确 DFS 搜索 · ')+result.simple_path_count+' 条简单路径 · 拓扑版本 '+result.topology_version+'。跳数仅统计交换机间链路，主机间总链路数需加 2。')}
 }
+
+let broadcast=null,broadcastBusy=false,showBroadcast=false;
+const broadcastSource=$('broadcast-src');
+for(const option of $('src').options)broadcastSource.append(option.cloneNode(true));
+if(demo)text('broadcast-install','计算广播树');
+function demoBroadcast(source){
+ const nodes=topo.switches,parents=new Map(nodes.map(n=>[n,n])),tree=new Map(nodes.map(n=>[n,[]]));
+ function find(n){
+  while(n!==parents.get(n)){
+   parents.set(n,parents.get(parents.get(n)));
+   n=parents.get(n);
+  }
+  return n;
+ }
+ const links=[...topo.links].sort((a,b)=>a.src-b.src||a.dst-b.dst);
+ let total_weight=0;
+ for(const edge of links){
+  const {src,dst,src_port,dst_port}=edge,left=find(src),right=find(dst);
+  if(left===right)continue;
+  parents.set(right,left);
+  tree.get(src).push({src,dst,src_port,dst_port});
+  tree.get(dst).push({src:dst,dst:src,src_port:dst_port,dst_port:src_port});
+  if(++total_weight===nodes.length-1)break;
+ }
+ const source_switch=hostNumber(source),pending=[{switch:source_switch,parent:null,in_port:1}];
+ const oriented=[],rules=[];
+ for(const current of pending){
+  const out_ports=current.parent===null?[]:[1];
+  for(const edge of tree.get(current.switch).sort((a,b)=>a.dst-b.dst)){
+   if(edge.dst===current.parent)continue;
+   oriented.push(edge);
+   out_ports.push(edge.src_port);
+   pending.push({switch:edge.dst,parent:current.switch,in_port:edge.dst_port});
+  }
+  rules.push({switch:current.switch,in_port:current.in_port,out_ports});
+ }
+ return {src:source,source_switch,links:oriented,rules,total_weight,status:'demo',
+  receivers:topo.hosts.filter(h=>h.name!==source).map(h=>h.name),counters:[]};
+}
+function renderBroadcast(){
+ const b=broadcast,hasTree=!!b&&b.status!=='stale'&&(demo||b.topology_version===topo.version);
+ $('broadcast-install').disabled=!connected||broadcastBusy;
+ $('broadcast-view').disabled=!hasTree;
+ $('broadcast-view').setAttribute('aria-pressed',String(hasTree&&showBroadcast));
+ text('broadcast-view',hasTree&&showBroadcast?'显示单播路径':'显示广播树');
+ text('broadcast-state',!b?'未配置':demo?'浏览器演示':!connected?'离线快照':
+  b.status==='stale'?'规则已撤回':b.all_switches_seen?'各交换机均有命中':'已配置 · 等待计数');
+ text('broadcast-summary',!b?(demo?'选择源主机，在浏览器中计算广播树。':'选择一台源主机，配置发往其他 19 台主机的 UDP 广播。'):
+  b.src+' → '+b.receivers.length+' 台主机 · '+b.links.length+' 条树边 · 总权重 '+b.total_weight+
+  (b.status==='stale'?' · '+b.reason:' · UDP 255.255.255.255:5005'));
+ text('broadcast-receivers',b?'接收主机 '+b.receivers.join('、'):'');
+ $('broadcast-details').hidden=!b;
+ if(!b||!$('broadcast-details').open)return;
+ const rows=new Map(b.counters.map(row=>[row.switch,row])),body=$('broadcast-rules');
+ body.replaceChildren();
+ for(const rule of b.rules){
+  const counter=rows.get(rule.switch),tr=node('tr');
+  const packets=demo?'—':!connected||!counter?.fresh?'等待采样':counter.present?counter.packets:'规则未读到';
+  for(const value of ['s'+rule.switch,rule.in_port,rule.out_ports.join('、'),packets])tr.append(node('td','mono',value));
+  body.append(tr);
+ }
+}
+$('broadcast-details').ontoggle=renderBroadcast;
+$('broadcast-view').onclick=()=>{showBroadcast=!showBroadcast;renderBroadcast();draw()};
+$('broadcast-form').onsubmit=async event=>{
+ event.preventDefault();
+ if(!connected||broadcastBusy)return;
+ broadcastBusy=true;renderBroadcast();
+ try{
+  const src=broadcastSource.value;
+  if(demo){
+   broadcast=demoBroadcast(src);
+  }else{
+   // Let any pre-install status poll finish before replacing its snapshot.
+   if(refreshing)await refreshTask;
+   const data=await api('/api/broadcast',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({src})});
+   broadcast=data.service;
+   await refresh();
+  }
+  showBroadcast=true;
+  msg(demo?'已计算演示广播树。':'广播流表已下发。请在 Mininet 中发送 UDP 广播。');
+ }catch(error){
+  msg(error.message,true);
+ }finally{
+  broadcastBusy=false;renderBroadcast();draw();
+ }
+};
+
 function edgesOf(p){const edges=new Set();for(let i=1;i<p.length;i++)edges.add([p[i-1],p[i]].sort((a,b)=>a-b).join('-'));return edges}
 function draw(){
  const svg=$('graph');svg.replaceChildren();const positions={};const css=getComputedStyle(root),color=name=>css.getPropertyValue(name).trim();
  function el(tag,attrs,value){const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[k,v]of Object.entries(attrs))e.setAttribute(k,v);if(value!==undefined)e.textContent=value;svg.append(e);return e}
  // 4x5 grid layout: IDs are row-major; links and ports still come from the API.
  for(const n of topo.switches){const row=Math.floor((n-1)/5),col=(n-1)%5;positions[n]={x:70+175*col,y:80+175*row,hx:120+175*col,hy:130+175*row}}
- const service=services.find(s=>s.id===chosen),active=service&&service.status==='installed',result=shownResult(),longest=edgesOf(result?(result.longest||result.path):[]),shortest=edgesOf(preview?preview.shortest:[]);
+ const tree=showBroadcast&&broadcast&&broadcast.status!=='stale'&&
+  (demo||broadcast.topology_version===topo.version)?broadcast:null;
+ $('unicast-legend').hidden=!!tree;
+ $('broadcast-legend').hidden=!tree;
+ const key=(a,b)=>a<b?a+'-'+b:b+'-'+a;
+ const treeEdges=new Map((tree?.links||[]).map(edge=>[key(edge.src,edge.dst),edge]));
+ const treeColor=color('--blue');
+ if(tree){
+  const defs=el('defs',{}),marker=el('marker',{id:'broadcast-arrow',viewBox:'0 0 10 10',refX:9,refY:5,markerWidth:4,markerHeight:4,orient:'auto'});
+  marker.append(el('path',{d:'M 0 0 L 10 5 L 0 10 Z',fill:treeColor}));
+  defs.append(marker);
+ }
+ const service=services.find(s=>s.id===chosen),active=service&&service.status==='installed',result=tree?null:shownResult(),longest=edgesOf(result?(result.longest||result.path):[]),shortest=edgesOf(!tree&&preview?preview.shortest:[]);
  const routeColor=!preview&&active&&service.both_directions_seen_on_all_hops?color('--success'):color('--orange');
 
- for(const edge of topo.links){const a=positions[edge.src],b=positions[edge.dst];if(!a||!b)continue;const k=[edge.src,edge.dst].sort((a,b)=>a-b).join('-'),selected=longest.has(k);const line=el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:selected?routeColor:color('--edge'),'stroke-width':selected?3.5:1.5,class:'network-edge'+(selected?' selected':'')});const title=document.createElementNS(svg.namespaceURI,'title');title.textContent=`s${edge.src}:端口${edge.src_port} ↔ s${edge.dst}:端口${edge.dst_port}`;line.append(title);if(shortest.has(k))el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:color('--blue'),'stroke-width':2.5,'stroke-dasharray':'7 5',class:'network-edge selected'})}
- for(const host of topo.hosts){const p=positions[host.switch];if(!p)continue;const end=result&&[result.src,result.dst].includes(host.name);el('line',{x1:p.x,y1:p.y,x2:p.hx,y2:p.hy,stroke:end?routeColor:color('--edge'),'stroke-width':end?3:1.3,class:'network-edge'+(end?' selected':'')});el('rect',{x:p.hx-22,y:p.hy-14,width:44,height:28,rx:10,fill:color('--paper'),stroke:end?routeColor:color('--edge'),'stroke-width':end?2:1,class:'host-node'});el('text',{x:p.hx,y:p.hy+5,'text-anchor':'middle',fill:color('--ink'),'font-size':14,'font-family':'ui-monospace,monospace',class:'node-text'},host.name)}
+ for(const edge of topo.links){const a=positions[edge.src],b=positions[edge.dst];if(!a||!b)continue;const k=[edge.src,edge.dst].sort((a,b)=>a-b).join('-'),branch=treeEdges.get(k),selected=branch||longest.has(k);const line=el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:branch?treeColor:selected?routeColor:color('--edge'),'stroke-width':selected?3.5:1.5,class:'network-edge'+(selected?' selected':'')});const title=document.createElementNS(svg.namespaceURI,'title');title.textContent=`s${edge.src}:端口${edge.src_port} ↔ s${edge.dst}:端口${edge.dst_port}`;line.append(title);if(branch){const from=positions[branch.src],to=positions[branch.dst];el('line',{x1:from.x,y1:from.y,x2:(from.x+to.x)/2,y2:(from.y+to.y)/2,stroke:treeColor,'stroke-width':3,'marker-end':'url(#broadcast-arrow)','aria-hidden':'true'})}if(shortest.has(k))el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:color('--blue'),'stroke-width':2.5,'stroke-dasharray':'7 5',class:'network-edge selected'})}
+ for(const host of topo.hosts){const p=positions[host.switch];if(!p)continue;const end=tree?[tree.src,...tree.receivers].includes(host.name):result&&[result.src,result.dst].includes(host.name);const hostColor=tree?(tree.src===host.name?color('--orange'):treeColor):routeColor;el('line',{x1:p.x,y1:p.y,x2:p.hx,y2:p.hy,stroke:end?hostColor:color('--edge'),'stroke-width':end?3:1.3,class:'network-edge'+(end?' selected':'')});el('rect',{x:p.hx-22,y:p.hy-14,width:44,height:28,rx:10,fill:color('--paper'),stroke:end?hostColor:color('--edge'),'stroke-width':end?2:1,class:'host-node'});el('text',{x:p.hx,y:p.hy+5,'text-anchor':'middle',fill:color('--ink'),'font-size':14,'font-family':'ui-monospace,monospace',class:'node-text'},host.name)}
  for(const n of topo.switches){const p=positions[n];el('circle',{cx:p.x,cy:p.y,r:19,fill:color('--primary-fill'),stroke:color('--paper'),'stroke-width':3,class:'switch-node'});el('text',{x:p.x,y:p.y+5,fill:color('--primary-ink'),'text-anchor':'middle','font-size':13,'font-family':'ui-monospace,monospace',class:'node-text'},'s'+n)}
  $('graph-empty').hidden=!!topo.switches.length;
- svg.setAttribute('aria-label',`网络拓扑：${topo.switches.length} 台交换机，${topo.hosts.length} 台主机，${topo.links.length} 条交换机间链路。${result?'当前路径为 '+pathText(result.longest||result.path):'尚未选择路径'}`);
+ svg.setAttribute('aria-label',`网络拓扑：${topo.switches.length} 台交换机，${topo.hosts.length} 台主机，${topo.links.length} 条交换机间链路。${tree?tree.src+' 的定向广播树':result?'当前路径为 '+pathText(result.longest||result.path):'尚未选择路径'}`);
 }
 function openDetail(id,opener){detailId=id;lastOpener=opener;renderDetail();$('service-dialog').showModal()}
 function renderDetail(){const svc=services.find(s=>s.id===detailId);if(!svc)return;text('detail-title',svc.src+' ↔ '+svc.dst);text('detail-status',(demo?'演示业务 · ':!connected?'连接已断开 · 上次状态：':'')+statusOf(svc));chips('detail-chips',svc.path);const tbody=$('detail-counters');tbody.replaceChildren();for(const row of svc.counters||[]){const tr=node('tr');for(const value of ['s'+row.switch,row.src,Number(row.packets).toLocaleString(),Number(row.bytes).toLocaleString(),demo?'模拟数据':!connected?'连接已断开':!row.fresh?'等待更新':row.present?'已读取':'规则未发现'])tr.append(node('td','mono',value));tbody.append(tr)}text('counters',JSON.stringify(svc.counters,null,2))}
@@ -241,18 +365,23 @@ $('clear-filter').onclick=clearFilter;$('service-search').oninput=renderServices
 function renderData(){
  text('metric-switches',topo.switches.length);text('metric-hosts',topo.hosts.length);text('metric-links',topo.links.length);text('metric-services',services.filter(s=>s.status==='installed').length);text('nav-nodes',topo.switches.length);text('nav-services',services.length);text('topology-version','V '+topo.version);
  text('graph-subtitle',(demo?'演示拓扑':'LLDP 发现')+' · '+topo.switches.length+' 台交换机 / '+topo.hosts.length+' 台主机');text('info',(demo?'模拟数据 · ':!connected?'离线快照 · ':'已发现 ')+topo.switches.length+'/20 台交换机，'+topo.hosts.length+'/20 台主机，'+topo.links.length+' 条链路');
- $('connection').classList.toggle('error',!connected);text('connection-label',demo?'演示预览':connected?'控制器已连接':'连接已断开');renderInspector();draw();renderServices();if(detailId)renderDetail();
+ $('connection').classList.toggle('error',!connected);text('connection-label',demo?'演示预览':connected?'控制器已连接':'连接已断开');renderInspector();renderBroadcast();draw();renderServices();if(detailId)renderDetail();
 }
 async function api(path,options={}){const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),12000);try{const res=await fetch(path,{...options,signal:abort.signal});if(!(res.headers.get('content-type')||'').includes('application/json'))throw Error('未收到 Ryu 数据，请通过控制器端口打开页面。');const data=await res.json();if(!res.ok)throw Error(data.error||res.statusText);return data}finally{clearTimeout(timer)}}
-async function refresh(){
+let refreshTask;
+function refresh(){
+ if(!refreshing)refreshTask=refreshData();
+ return refreshTask;
+}
+async function refreshData(){
  if(demo){renderData();text('update-time','演示模式 · 本地路径计算 · 非实时网络');setControls();return}if(refreshing)return;refreshing=true;
- try{const [nextTopo,nextServices]=await Promise.all([api('/api/topology'),api('/api/services')]);if(!Array.isArray(nextTopo.switches)||!Array.isArray(nextServices))throw Error('控制器数据格式不正确');topo=nextTopo;services=nextServices;connected=true;if(preview&&preview.topology_version!==topo.version){preview=null;msg('拓扑已变化，请重新计算路径。',true)}text('empty-title','正在发现网络');text('empty-copy','控制器已连接，等待交换机接入与 LLDP 发现。');renderData();text('update-time','上次更新 '+new Date().toLocaleTimeString('zh-CN',{hour12:false}));
+ try{const [nextTopo,nextServices,nextBroadcast]=await Promise.all([api('/api/topology'),api('/api/services'),api('/api/broadcast')]);if(!Array.isArray(nextTopo.switches)||!Array.isArray(nextServices))throw Error('控制器数据格式不正确');topo=nextTopo;services=nextServices;broadcast=nextBroadcast.service;connected=true;if(preview&&preview.topology_version!==topo.version){preview=null;msg('拓扑已变化，请重新计算路径。',true)}text('empty-title','正在发现网络');text('empty-copy','控制器已连接，等待交换机接入与 LLDP 发现。');renderData();text('update-time','上次更新 '+new Date().toLocaleTimeString('zh-CN',{hour12:false}));
  }catch(e){connected=false;text('empty-title','暂时无法连接控制器');text('empty-copy','请确认 Ryu 已启动，并通过它的 8080 端口打开页面。');renderData();text('info','连接失败：'+(e.name==='AbortError'?'请求超时':e.message));text('update-time',topo.switches.length?'连接中断 · 显示上次数据':'尚未收到网络数据')
  }finally{refreshing=false;setControls()}
 }
 async function action(install){
  if(busy||!connected||(demo&&install))return;const src=$('src').value,dst=$('dst').value;if(src===dst){msg('请选择两个不同主机。',true);return}busy=true;setControls();const button=$(install?'install':'search'),span=button.querySelector('span');span.textContent=install?'正在配置…':'正在计算…';msg(install?'正在计算最长路并配置双向通信…':'正在搜索所有简单路径…');
- try{const result=demo?await calculateDemoPaths(src,dst):install?await api('/api/services',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({src,dst})}):await api('/api/paths?'+new URLSearchParams({src,dst}));if(install){chosen=result.id;preview=null;services=services.filter(s=>s.id!==result.id);services.push(result);msg('双向流表已下发。请在 Mininet 中执行 ping，再到业务监测查看各跳计数。')}else{preview=result;msg((demo?'演示模式 · 浏览器本地精确搜索完成：':'精确搜索完成：')+result.simple_path_count+' 条简单路径；最短 '+result.shortest_hops+' 跳，最长 '+result.longest_hops+' 跳。')}renderData();await refresh()
+ try{const result=demo?await calculateDemoPaths(src,dst):install?await api('/api/services',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({src,dst})}):await api('/api/paths?'+new URLSearchParams({src,dst}));showBroadcast=false;if(install){chosen=result.id;preview=null;services=services.filter(s=>s.id!==result.id);services.push(result);msg('双向流表已下发。请在 Mininet 中执行 ping，再到业务监测查看各跳计数。')}else{preview=result;msg((demo?'演示模式 · 浏览器本地精确搜索完成：':'精确搜索完成：')+result.simple_path_count+' 条简单路径；最短 '+result.shortest_hops+' 跳，最长 '+result.longest_hops+' 跳。')}renderData();await refresh()
  }catch(e){msg(e.name==='AbortError'?'请求超时。请检查控制器状态后重试。':e.message,true)}finally{busy=false;span.textContent=install?'配置最长路':'计算路径';setControls()}
 }
 $('planner').onsubmit=e=>{e.preventDefault();action(false)};$('install').onclick=()=>action(true);$('retry').onclick=refresh;$('refresh').onclick=refresh;
