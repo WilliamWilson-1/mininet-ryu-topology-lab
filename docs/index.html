@@ -172,7 +172,7 @@
 <header class="topbar glass"><a href="#topology" class="brand" id="brand"><span class="brandmark"><svg class="icon" aria-hidden="true"><use href="#i-network"/></svg></span><span>拓扑实验室<small>Mininet + Ryu</small></span></a><div class="top-actions"><span class="top-caption mono">OPENFLOW 1.3</span><span class="badge" id="connection"><span class="status-dot"></span><span class="connection-label" id="connection-label">正在连接</span></span><details class="appearance" id="appearance"><summary class="icon-button" aria-label="外观设置"><svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg></summary><div class="appearance-popover glass"><h2>外观设置</h2><label for="theme">页面主题</label><select class="theme-select" id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select><label class="check-label"><input type="checkbox" id="reduced">减少透明效果</label><p>偏好保存在当前浏览器。系统减少动效设置会自动生效。</p></div></details></div></header>
 <div class="workspace"><aside class="sidebar glass"><p class="sidebar-label">实验工作区</p><nav aria-label="工作区导航"><button class="nav-button active" data-view="topology" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-network"/></svg>网络拓扑<span class="nav-count mono" id="nav-nodes">—</span></button><button class="nav-button" data-view="paths"><svg class="icon" aria-hidden="true"><use href="#i-route"/></svg>路径分析</button><button class="nav-button" data-view="services"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>业务监测<span class="nav-count mono" id="nav-services">0</span></button></nav><div class="sidebar-note"><strong>从发现到验证</strong><p style="margin-top:6px">选择主机对，让路径与流量都有迹可循。</p><div class="step"><span class="mono">01</span>发现交换机与链路</div><div class="step"><span class="mono">02</span>计算简单路径</div><div class="step"><span class="mono">03</span>配置双向通信</div><div class="step"><span class="mono">04</span>查看各跳流量</div></div><div class="sidebar-footer"><p class="mono">20 SWITCHES / 20 HOSTS</p><p style="margin-top:6px">DFS · 最长简单路径实验</p></div></aside>
 <main id="main" tabindex="-1"><div class="hero"><div><p class="eyebrow">NETWORK LAB / 网络实验</p><h1>让每一跳，都清晰可见。</h1><p>发现网络，比较路径，再沿最长路建立主机间通信。</p></div><div class="hero-symbol" aria-hidden="true"><svg class="icon"><use href="#i-route"/></svg></div></div>
-<div class="demo-banner" id="demo-banner" hidden><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><span><strong>演示模式</strong> · 使用 4×5 示例网格，可任选 h1～h20 中两台不同主机，在浏览器计算最短路与最长简单路径；不连接真实 Mininet，不下发流表。</span></div>
+<div class="demo-banner" id="demo-banner" hidden><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><span><strong>演示模式</strong> · 使用所选示例拓扑，可任选 h1～h20 中两台不同主机，在浏览器计算最短路与最长简单路径；不连接真实 Mininet，不下发流表。</span></div>
 <div class="metrics" aria-label="网络概览"><article class="metric content"><div class="metric-label">交换机<svg class="icon" aria-hidden="true"><use href="#i-network"/></svg></div><div class="metric-number"><strong class="mono" id="metric-switches">—</strong><span>/ 20 已发现</span></div></article><article class="metric content"><div class="metric-label">主机<svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg></div><div class="metric-number"><strong class="mono" id="metric-hosts">—</strong><span>/ 20 已发现</span></div></article><article class="metric content"><div class="metric-label">网络链路<svg class="icon" aria-hidden="true"><use href="#i-link"/></svg></div><div class="metric-number"><strong class="mono" id="metric-links">—</strong><span>交换机间</span></div></article><article class="metric content"><div class="metric-label">已配置业务<svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg></div><div class="metric-number"><strong class="mono" id="metric-services">—</strong><span>主机对</span></div></article></div>
 <div class="view-tabs glass" id="tabs" role="tablist" aria-label="实验视图"><span class="tab-thumb" aria-hidden="true" id="tab-thumb"></span><button class="tab" id="tab-topology" role="tab" aria-selected="true" aria-controls="panel-topology" data-view="topology"><svg class="icon" aria-hidden="true"><use href="#i-network"/></svg>网络拓扑</button><button class="tab" id="tab-paths" role="tab" aria-selected="false" aria-controls="panel-paths" tabindex="-1" data-view="paths"><svg class="icon" aria-hidden="true"><use href="#i-route"/></svg>路径分析</button><button class="tab" id="tab-services" role="tab" aria-selected="false" aria-controls="panel-services" tabindex="-1" data-view="services"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>业务监测</button></div>
 <form class="planner glass" id="planner"><div class="field"><label for="src">源主机</label><select id="src"></select></div><button type="button" class="icon-button swap-button" id="swap" aria-label="交换源主机与目的主机"><svg class="icon" aria-hidden="true"><use href="#i-swap"/></svg></button><div class="field"><label for="dst">目的主机</label><select id="dst"></select></div><button type="submit" class="button" id="search"><svg class="icon" aria-hidden="true"><use href="#i-route"/></svg><span>计算路径</span></button><button type="button" class="button primary" id="install"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg><span>配置最长路</span></button></form>
@@ -209,7 +209,7 @@ let appearance={theme:'system',reduced:false};try{Object.assign(appearance,JSON.
 if(!['system','light','dark'].includes(appearance.theme))appearance.theme='system';
 $('theme').value=appearance.theme;$('reduced').checked=appearance.reduced;
 let topo={switches:[],links:[],hosts:[]},services=[],chosen=null,preview=null,busy=false,connected=false,refreshing=false,currentView='topology',detailId=null,lastOpener=null,serviceSignature='';
-const DEMO_EDGES=[[1, 2], [2, 3], [3, 4], [4, 5], [6, 7], [7, 8], [8, 9], [9, 10], [11, 12], [12, 13], [13, 14], [14, 15], [16, 17], [17, 18], [18, 19], [19, 20], [1, 6], [2, 7], [3, 8], [4, 9], [5, 10], [6, 11], [7, 12], [8, 13], [9, 14], [10, 15], [11, 16], [12, 17], [13, 18], [14, 19], [15, 20]];
+let DEMO_EDGES=[[1, 2], [2, 3], [3, 4], [4, 5], [6, 7], [7, 8], [8, 9], [9, 10], [11, 12], [12, 13], [13, 14], [14, 15], [16, 17], [17, 18], [18, 19], [19, 20], [1, 6], [2, 7], [3, 8], [4, 9], [5, 10], [6, 11], [7, 12], [8, 13], [9, 14], [10, 15], [11, 16], [12, 17], [13, 18], [14, 19], [15, 20]];
 // Browser-only counterpart of lab/paths.py. Exhaust simple paths, never return a partial optimum.
 async function calculateDemoPaths(src,dst,edges=DEMO_EDGES){
  if(!/^h([1-9]|1[0-9]|20)$/.test(src)||!/^h([1-9]|1[0-9]|20)$/.test(dst))throw Error('请选择 h1～h20 范围内的主机。');
@@ -240,13 +240,23 @@ async function calculateDemoPaths(src,dst,edges=DEMO_EDGES){
  if(!shortest)throw Error('两个交换机之间没有可达路径。');
  return {src,dst,shortest,longest,shortest_hops:shortest.length-1,longest_hops:longest.length-1,simple_path_count:count,dfs_visits:visits,exact:true,topology_version:1};
 }
-function makeDemo(){
- const switches=Array.from({length:20},(_,i)=>i+1),next=Object.fromEntries(switches.map(n=>[n,2]));
- const links=DEMO_EDGES.map(([a,b])=>({src:Math.min(a,b),dst:Math.max(a,b),src_port:a<b?next[a]++:next[b]++,dst_port:a<b?next[b]++:next[a]++}));
+async function makeDemo(){
+ const catalog=await api('topologies.json');
+ const name=new URLSearchParams(location.search).get('topology')||'grid';
+ const config=catalog[name];
+ if(!config)throw Error('未知演示拓扑 '+name+'，可选 '+Object.keys(catalog).join('、'));
+ DEMO_EDGES=config.edges;
+ const switches=Array.from({length:config.nodes},(_,i)=>i+1);
+ const next=Object.fromEntries(switches.map(n=>[n,2]));
+ const links=DEMO_EDGES.map(([a,b])=>{
+  const aPort=next[a]++,bPort=next[b]++;
+  return {src:Math.min(a,b),dst:Math.max(a,b),
+   src_port:a<b?aPort:bPort,dst_port:a<b?bPort:aPort};
+ });
  const hosts=switches.map(n=>({name:'h'+n,switch:n,port:1,ip:'10.0.0.'+n}));
- topo={version:1,switches,links,hosts};
- preview={src:'h1',dst:'h20',shortest:[1,2,3,4,5,10,15,20],longest:[1,2,3,4,5,10,9,8,7,6,11,16,17,12,13,18,19,14,15,20],shortest_hops:7,longest_hops:19,topology_version:1,exact:true,simple_path_count:976};
- services=[{...preview,id:'h1-h20',path:[1,2,3,4,5,10,9,8,7,6,11,16,17,12,13,18,19,14,15,20],cookie:536870913,status:'installed',both_directions_seen_on_all_hops:false,counters:switches.flatMap(switchId=>['h1','h20'].map(src=>({switch:switchId,src,packets:0,bytes:0,fresh:true,present:true})))}];chosen='h1-h20';connected=true;$('demo-banner').hidden=false;
+ topo={version:1,name,title:config.title,layout:config.layout,expected_links:links.length,switches,links,hosts};
+ preview=await calculateDemoPaths('h1','h20');
+ services=[];chosen=null;connected=true;$('demo-banner').hidden=false;
 }
 for(let i=1;i<=20;i++)for(const id of ['src','dst']){const o=document.createElement('option');o.value='h'+i;o.textContent='h'+i;$(id).append(o)}$('dst').value='h20';
 function text(id,value){const e=$(id);if(e.textContent!==String(value))e.textContent=value}
@@ -259,7 +269,7 @@ function statusOf(s){return s.status==='stale'?'拓扑已变化 · 请重新配�
 function setControls(){
  const same=$('src').value===$('dst').value;
  $('search').disabled=busy||!connected||same;
- $('search').title=same?'请选择两个不同主机':demo?'在浏览器中计算示例网格路径':!connected?'请先连接 Ryu 控制器':'';
+ $('search').title=same?'请选择两个不同主机':demo?'在浏览器中计算当前拓扑路径':!connected?'请先连接 Ryu 控制器':'';
  $('install').disabled=demo||busy||!connected||same;
  $('install').title=demo?'演示模式只计算路径，不下发真实流表':!connected?'请先连接 Ryu 控制器':same?'请选择两个不同主机':'';
  for(const id of ['src','dst','swap'])$(id).disabled=busy;
@@ -279,7 +289,7 @@ function renderInspector(){
  text('route-status',demo?'演示路径':preview?'已计算':result?'已配置':'未计算');
  $('analysis-empty').hidden=!!result;$('comparison').hidden=!result;
  text('analysis-next',demo?'可切换任意两台不同主机，再次计算并比较路径。演示计算在浏览器本地完成，不下发流表。':'计算完成后，点击上方“配置最长路”建立双向通信。流表下发后仍需通过 ping 与各跳计数验证。');
- if(result){text('analysis-short',result.shortest_hops);text('analysis-long',result.longest_hops);chips('short-chips',result.shortest);chips('long-chips',longest);text('analysis-evidence',(demo?'示例网格 · 浏览器精确 DFS · ':'精确 DFS 搜索 · ')+result.simple_path_count+' 条简单路径 · 拓扑版本 '+result.topology_version+'。跳数仅统计交换机间链路，主机间总链路数需加 2。')}
+ if(result){text('analysis-short',result.shortest_hops);text('analysis-long',result.longest_hops);chips('short-chips',result.shortest);chips('long-chips',longest);text('analysis-evidence',(demo?'演示拓扑 · 浏览器精确 DFS · ':'精确 DFS 搜索 · ')+result.simple_path_count+' 条简单路径 · 拓扑版本 '+result.topology_version+'。跳数仅统计交换机间链路，主机间总链路数需加 2。')}
 }
 
 let broadcast=null,broadcastBusy=false,showBroadcast=false;
@@ -374,6 +384,33 @@ $('broadcast-form').onsubmit=async event=>{
 };
 
 function edgesOf(p){const edges=new Set();for(let i=1;i<p.length;i++)edges.add([p[i-1],p[i]].sort((a,b)=>a-b).join('-'));return edges}
+function topologyPositions(layout){
+ const positions={};
+ function placeRing(nodes,cx,cy,rx,ry,hostOffset){
+  nodes.forEach((n,i)=>{
+   const angle=2*Math.PI*i/nodes.length-Math.PI/2;
+   positions[n]={x:cx+rx*Math.cos(angle),y:cy+ry*Math.sin(angle),
+    hx:cx+(rx+hostOffset)*Math.cos(angle),hy:cy+(ry+hostOffset)*Math.sin(angle)};
+  });
+ }
+ if(layout==='circle'){
+  placeRing(Array.from({length:20},(_,i)=>i+1),440,360,310,245,63);
+ }else if(layout==='dual-ring'){
+  placeRing(Array.from({length:10},(_,i)=>i+1),225,355,132,225,56);
+  placeRing(Array.from({length:10},(_,i)=>i+11),655,355,132,225,56);
+ }else if(layout==='campus'){
+  for(let group=0;group<4;group++){
+   placeRing(Array.from({length:5},(_,i)=>group*5+i+1),
+    group%2?655:225,group<2?180:530,107,91,54);
+  }
+ }else{
+  for(let n=1;n<=20;n++){
+   const row=Math.floor((n-1)/5),col=(n-1)%5;
+   positions[n]={x:70+175*col,y:80+175*row,hx:120+175*col,hy:130+175*row};
+  }
+ }
+ return positions;
+}
 let lastGraphKey,lastHighlightKey;
 function draw(){
  const tree=showBroadcast&&broadcast&&broadcast.status!=='stale'&&
@@ -386,7 +423,7 @@ function draw(){
  const highlightKey=JSON.stringify(tree
   ? [tree.src,tree.links.map(({src,dst})=>[src,dst])]
   : [result?.src,result?.dst,path,shortPath]);
- const graphKey=JSON.stringify([topo.version,topo.switches,
+ const graphKey=JSON.stringify([topo.version,topo.name,topo.layout,topo.switches,
   topo.links.map(({src,dst,src_port,dst_port})=>[src,dst,src_port,dst_port]),
   topo.hosts.map(({name,switch:dpid})=>[name,dpid]),
   highlightKey,verified,root.dataset.theme,root.dataset.transparency,motionMedia.matches]);
@@ -396,10 +433,8 @@ function draw(){
  lastGraphKey=graphKey;
  lastHighlightKey=highlightKey;
 
- const svg=$('graph');svg.replaceChildren();const positions={};const css=getComputedStyle(root),color=name=>css.getPropertyValue(name).trim();
+ const svg=$('graph');svg.replaceChildren();const positions=topologyPositions(topo.layout);const css=getComputedStyle(root),color=name=>css.getPropertyValue(name).trim();
  function el(tag,attrs,value){const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const[k,v]of Object.entries(attrs))e.setAttribute(k,v);if(value!==undefined)e.textContent=value;svg.append(e);return e}
- // 4x5 grid layout: IDs are row-major; links and ports still come from the API.
- for(const n of topo.switches){const row=Math.floor((n-1)/5),col=(n-1)%5;positions[n]={x:70+175*col,y:80+175*row,hx:120+175*col,hy:130+175*row}}
  $('unicast-legend').hidden=!!tree;
  $('broadcast-legend').hidden=!tree;
  const key=(a,b)=>a<b?a+'-'+b:b+'-'+a;
@@ -456,7 +491,7 @@ function clearFilter(){$('service-search').value='';$('service-state').value='al
 $('clear-filter').onclick=clearFilter;$('service-search').oninput=renderServices;$('service-state').onchange=renderServices;
 function renderData(){
  text('metric-switches',topo.switches.length);text('metric-hosts',topo.hosts.length);text('metric-links',topo.links.length);text('metric-services',services.filter(s=>s.status==='installed').length);text('nav-nodes',topo.switches.length);text('nav-services',services.length);text('topology-version','V '+topo.version);
- text('graph-subtitle',(demo?'演示拓扑':'LLDP 发现')+' · '+topo.switches.length+' 台交换机 / '+topo.hosts.length+' 台主机');text('info',(demo?'模拟数据 · ':!connected?'离线快照 · ':'已发现 ')+topo.switches.length+'/20 台交换机，'+topo.hosts.length+'/20 台主机，'+topo.links.length+' 条链路');
+ text('graph-subtitle',(topo.title||'网络拓扑')+' · '+(demo?'演示拓扑':'LLDP 发现')+' · '+topo.switches.length+' 台交换机 / '+topo.hosts.length+' 台主机');text('info',(demo?'模拟数据 · ':!connected?'离线快照 · ':'已发现 ')+topo.switches.length+'/20 台交换机，'+topo.hosts.length+'/20 台主机，'+topo.links.length+' 条链路');
  $('connection').classList.toggle('error',!connected);text('connection-label',demo?'演示预览':connected?'控制器已连接':'连接已断开');renderInspector();renderBroadcast();draw();renderServices();if(detailId)renderDetail();
 }
 async function api(path,options={}){const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),12000);try{const res=await fetch(path,{...options,signal:abort.signal});if(!(res.headers.get('content-type')||'').includes('application/json'))throw Error('未收到 Ryu 数据，请通过控制器端口打开页面。');const data=await res.json();if(!res.ok)throw Error(data.error||res.statusText);return data}finally{clearTimeout(timer)}}
@@ -556,6 +591,17 @@ window.addEventListener('blur',clearGlow);
 precisePointer.addEventListener('change',clearGlow);
 highContrast.addEventListener('change',clearGlow);
 motionMedia.addEventListener('change',()=>{clearGlow();draw()});
-if(demo)makeDemo();applyAppearance();selectView(location.hash.slice(1)||'topology',false,false);refresh();if(!demo)setInterval(refresh,2000);
+applyAppearance();selectView(location.hash.slice(1)||'topology',false,false);
+if(demo){
+ makeDemo().then(refresh).catch(error=>{
+  connected=false;msg(error.message,true);renderData();setControls();
+  text('empty-title','演示拓扑加载失败');
+  text('empty-copy','请通过 HTTP 打开页面并检查 topology 参数。');
+ });
+}else{
+ refresh();setInterval(refresh,2000);
+}
+
+
 
 </script></body></html>

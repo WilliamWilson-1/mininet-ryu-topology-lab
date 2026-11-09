@@ -14,6 +14,7 @@ from ryu.topology.api import get_switch, get_link
 from ryu.app.wsgi import WSGIApplication, ControllerBase, route
 from webob import Response
 from paths import dfs_paths, SearchLimit
+from topologies import load_topology, topology_catalog
 from broadcast import (broadcast_plan, BROADCAST_COOKIE, BROADCAST_COOKIE_MASK,
                        BROADCAST_MAC, BROADCAST_IP, BROADCAST_PORT, BROADCAST_PRIORITY)
 
@@ -35,7 +36,7 @@ class LabController(app_manager.RyuApp):
         self.pending_barriers = {}
         self.pending_mods = {}
         self.lock = hub.Semaphore(1)
-        config = json.loads(Path(__file__).with_name('topology.json').read_text())
+        config = self.topology_config = load_topology()
         self.expected_nodes = set(range(1, config['nodes'] + 1))
         self.expected_edges = {tuple(sorted(edge)) for edge in config['edges']}
         self.next_cookie = 0x20000000
@@ -182,8 +183,9 @@ class LabController(app_manager.RyuApp):
             if set(graph) == self.expected_nodes \
                     and discovered == self.expected_edges:
                 self.emit('topology', '·', 0,
-                          '已发现拓扑与 topology.json 完全一致'
-                          '(20 交换机 / 31 链路)')
+                          '已发现拓扑与 %s 完全一致（%d 交换机 / %d 链路）' %
+                          (self.topology_config['title'], len(self.expected_nodes),
+                           len(self.expected_edges)))
 
     def remove_cookie(self, cookie):
         self.emit('flow_del', '→', 0,
@@ -272,7 +274,9 @@ class LabController(app_manager.RyuApp):
         discovered = {(a, b) for a, ports in self.graph.items()
                       for b in ports if a < b}
         if set(self.graph) != self.expected_nodes or discovered != self.expected_edges:
-            raise ValueError('已发现拓扑与 topology.json 尚未完全一致，请等待 LLDP 收敛或检查链路')
+            raise ValueError('已发现拓扑与所选 %s 尚未一致，请检查两端拓扑选择并等待 LLDP 收敛' %
+                             self.topology_config['name'])
+
     def compute(self, src, dst):
         self.require_full_topology()
         a, b = self.host_id(src), self.host_id(dst)
@@ -332,8 +336,9 @@ class LabController(app_manager.RyuApp):
                                path=path, created_at=time.time())
                 self.services[key] = service
                 self.emit('service', '·', 0,
-                          '业务 %s 下发完成:%d 跳最长路、40 条 FlowMod、'
-                          '20 条 Barrier 全部收到回复' % (key, len(path) - 1))
+                          '业务 %s 下发完成，%d 跳最长路、%d 条 FlowMod、'
+                          '%d 条 Barrier 全部收到回复' %
+                          (key, len(path) - 1, 2 * len(path), len(path)))
                 return service
             except Exception:
                 self.remove_cookie(cookie)
@@ -437,7 +442,9 @@ class LabController(app_manager.RyuApp):
         edges = [dict(src=a, dst=b, src_port=port, dst_port=self.graph[b][a])
                  for a, ports in sorted(self.graph.items())
                  for b, port in sorted(ports.items()) if a < b]
-        return dict(version=self.version, switches=sorted(self.graph),
+        return dict(version=self.version, name=self.topology_config['name'],
+                    title=self.topology_config['title'], layout=self.topology_config['layout'],
+                    expected_links=len(self.expected_edges), switches=sorted(self.graph),
                     links=edges, hosts=list(self.hosts.values()))
 
     def service_list(self):
@@ -476,6 +483,10 @@ class LabAPI(ControllerBase):
         return Response(status=status, content_type='application/json',
                         charset='utf-8',
                         body=json.dumps(data, ensure_ascii=False).encode('utf-8'))
+
+    @route('lab_topology_catalog', '/topologies.json', methods=['GET'])
+    def topology_catalog(self, req, **kwargs):
+        return self.response(topology_catalog())
 
     @route('lab_topology', '/api/topology', methods=['GET'])
     def topology(self, req, **kwargs):

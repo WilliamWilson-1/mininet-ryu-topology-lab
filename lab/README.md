@@ -53,7 +53,7 @@ sudo /usr/bin/python3 topo20.py
 ssh -N -L 18080:127.0.0.1:8080 ubuntu@192.168.64.8
 ```
 
-等页面显示 20 台交换机、20 台主机和 31 条交换机间链路。在“网络拓扑”找到“Project 2 · Kruskal 广播”，选择 h1，点击“配置广播树”。也可从终端调用相同接口。
+默认网格拓扑下，等页面显示 20 台交换机、20 台主机和 31 条交换机间链路。使用其他预设时，链路数以第 7 节为准。在“网络拓扑”找到“Project 2 · Kruskal 广播”，选择 h1，点击“配置广播树”。也可从终端调用相同接口。
 
 ```bash
 curl -fsS http://127.0.0.1:8080/api/broadcast \
@@ -84,7 +84,7 @@ mininet> sh ovs-ofctl -O OpenFlow13 dump-flows s1
 
 ## 5. 从 LLDP 到转发流表
 
-1. `controller.py` 的 `require_full_topology()` 刷新拓扑，检查交换机和链路是否与 `topology.json` 一致。邻接表 `graph[a][b]` 存的是 a 连接 b 的本地 OpenFlow 端口。主机端口来自原有的 PacketIn 学习。
+1. `controller.py` 的 `require_full_topology()` 刷新拓扑，检查交换机和链路是否与所选拓扑一致。邻接表 `graph[a][b]` 存的是 a 连接 b 的本地 OpenFlow 端口。主机端口来自原有的 PacketIn 学习。
 2. `broadcast.py` 的 `kruskal_tree()` 将双向链路合并为无向边，按 `(权重, 较小 DPID, 较大 DPID)` 排序。实验链路统一为 10 Mbit/s、1 ms，因此每条边权重取 1。同权按编号排序，让结果可复现。
 3. 并查集最初让每台交换机独立成组。扫描一条边时，查询两端所属组。不同组就选边并合并两组，同组就跳过以免成环。查询使用路径压缩，合并时将小组挂到大组。20 个顶点连成树需要 19 条边，本实验的最小总权重为 19。
 4. `broadcast_plan()` 使用队列从源交换机遍历树，把每条边定向为父到子。根从源主机端口收包，只向子交换机输出。非根从父交换机端口收包，向本地主机及全部子交换机输出。每个非根恰有一个父节点，因此一份匹配的报文在每条树边上只传一次。
@@ -116,3 +116,61 @@ curl -fsS http://127.0.0.1:8080/api/broadcast | python3 -m json.tool
 检查 `status` 为 `installed`，`links` 有 19 条，`total_weight` 为 19，`receivers` 有 19 台。发送一份报文后，等两至四秒，20 条规则的 `packets` 应各增加 1，`all_switches_seen` 应为 `true`。接收端网卡抓包用于确认报文已送到该主机。
 
 若两次读取之间没有其他发送者，可用计数增量检查是否有重复转发。当前计数是本次流表安装后的累计值，重新配置广播树会产生新 cookie 并重新计数。
+
+## 7. 用命令切换网络拓扑
+
+以下四种预设各有 20 台交换机和 20 台主机，每台交换机固定连接一台同编号主机。链路统一配置为 10 Mbit/s、1 ms，广播树的边权取 1。
+
+| 命令名称 | 拓扑 | 交换机间链路数 | 结构 |
+| --- | --- | --- | --- |
+| `grid` | 4×5 网格 | 31 | 原实验指定的横纵网格 |
+| `ring-chords` | 弦环网络 | 28 | 20 节点环，加跨环弦与局部捷径 |
+| `dual-ring` | 双环互联 | 27 | 两个 10 节点环，配备多条环间连接和环内捷径 |
+| `campus` | 多园区互联 | 28 | 四个 5 节点园区环，园区之间有环形骨干和跨区连接 |
+
+在实验目录列出预设，选择下一次启动的拓扑。
+
+```bash
+cd ~/mininet-project2-dlc/lab
+python3 topologies.py --list
+python3 topologies.py --select ring-chords
+```
+
+切换一次完整实验时，先在原 Mininet CLI 输入 `exit`，等待网络退出，再在原 Ryu 终端按 Ctrl+C。随后运行 `--select`，按第 2 节原有命令重新启动 Ryu 和 Mininet。两端都读取本目录的 `.active-topology` 选择文件，Ryu 在启动时固定此次实验所需的节点与链路。该选择文件由本机生成，并已加入 Git 忽略列表。
+
+切换其他预设只需更换名称。
+
+```bash
+python3 topologies.py --select dual-ring
+python3 topologies.py --select campus
+python3 topologies.py --select grid
+```
+
+上面的命令是三个可选示例，实际运行其中一条即可。若依次执行，最终选择的是 `grid`。选择完成后重启两端，以新拓扑重新计算并配置业务。
+
+Mininet 也接受 `sudo /usr/bin/python3 topo20.py --topology campus`，用于显式指定预设。此时 Ryu 所在目录也应先选择 `campus`。若两端不一致，控制器会拒绝配置业务并提示检查拓扑选择。
+
+普通终端检查当前控制器使用的拓扑。
+
+```bash
+curl -fsS http://127.0.0.1:8080/api/topology | python3 -m json.tool
+```
+
+`name`、`title` 和 `expected_links` 分别显示预设名称、展示名称和期望链路数。页面按预设使用网格、圆环、双环或四园区布局。待 LLDP 发现完整后，广播配置、UDP 发送和抓包步骤与第 3 节相同，每棵广播树仍有 19 条边。
+
+浏览器演示支持用网址选择同样的拓扑。
+
+```text
+http://127.0.0.1:8766/?demo=1&topology=grid
+http://127.0.0.1:8766/?demo=1&topology=ring-chords
+http://127.0.0.1:8766/?demo=1&topology=dual-ring
+http://127.0.0.1:8766/?demo=1&topology=campus
+```
+
+在仓库根目录按第 4 节启动 HTTP 服务后打开这些地址。`lab/topologies.json` 保存新增预设，原网格继续从 `lab/topology.json` 读取。`docs/topologies.json` 是浏览器演示使用的同内容目录，测试会核对两者一致性。
+
+检查全部预设的连通性、所有主机对的路径结果和所有广播源的转发计划。
+
+```bash
+python -m unittest -v test_topologies.py test_broadcast.py test_paths.py
+```

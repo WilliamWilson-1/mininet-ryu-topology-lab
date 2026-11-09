@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Run with the system Python, which owns the apt-installed Mininet package."""
 import argparse
-import json
-from pathlib import Path
 from mininet.net import Mininet
 from mininet.topo import Topo
 from mininet.node import RemoteController, OVSSwitch
 from mininet.link import TCLink
 from mininet.cli import CLI
 from mininet.log import setLogLevel
+from topologies import load_topology, topology_catalog
 
 
 class LabTopo(Topo):
@@ -35,8 +34,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--controller', default='127.0.0.1')
     parser.add_argument('--port', type=int, default=6653)
+    parser.add_argument('--topology', choices=topology_catalog(),
+                        help='覆盖本目录已选择的拓扑；控制器需选择同一拓扑')
     args = parser.parse_args()
-    config = json.loads(Path(__file__).with_name('topology.json').read_text())
+    config = load_topology(args.topology)
+    print('启动 %s (%s)，20 台交换机 / %d 条交换机间链路' %
+          (config['title'], config['name'], len(config['edges'])))
     net = Mininet(topo=LabTopo(config=config), controller=None,
                   switch=OVSSwitch, link=TCLink, autoStaticArp=True)
     net.addController('c0', controller=RemoteController,
