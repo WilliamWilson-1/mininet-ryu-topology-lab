@@ -17,7 +17,7 @@ class DemoPathTests(unittest.TestCase):
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const html=fs.readFileSync(process.argv[1],'utf8');
 const edges=JSON.parse(fs.readFileSync(process.argv[2],'utf8'))[process.argv[3]].edges;
-const fn=html.slice(html.indexOf('async function calculateDemoPaths('),html.indexOf('async function makeDemo(){'));
+const fn=html.slice(html.indexOf('async function calculateDemoPaths('),html.indexOf('let demoCatalog,demoSwitching=false;'));
 assert(fn.startsWith('async function calculateDemoPaths('));
 const scope=vm.createContext({performance,setTimeout,DEMO_EDGES:edges});vm.runInContext(fn,scope);
 (async()=>{
