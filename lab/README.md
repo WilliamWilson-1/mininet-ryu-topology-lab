@@ -69,12 +69,14 @@ curl -fsS http://127.0.0.1:8080/api/broadcast \
 ```text
 mininet> h7 timeout 30 tcpdump -ni h7-eth0 -c 1 'udp dst port 5005' > /tmp/project2-h7.log 2>&1 &
 mininet> h20 timeout 30 tcpdump -ni h20-eth0 -c 1 'udp dst port 5005' > /tmp/project2-h20.log 2>&1 &
-mininet> h1 python3 -c "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1); s.sendto(b'project2',('255.255.255.255',5005))"
+mininet> h1 python3 -c "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1); s.bind(('10.0.0.1',0)); print(s.sendto(b'project2',('255.255.255.255',5005)))"
 mininet> sh cat /tmp/project2-h7.log /tmp/project2-h20.log
 mininet> sh ovs-ofctl -O OpenFlow13 dump-flows s1
 ```
 
-如果选择其他源，发送命令的主机名也要换成该源，并在其他主机抓包。单次发送后，新安装的 20 条广播规则应各命中一次。展开页面的端口表可以查看计数。要证明某个接收端实际收到报文，查看该主机网卡的抓包结果。
+发送命令应输出 `8`，表示 8 字节的 UDP 载荷已提交给本机协议栈。先等抓包进程输出文件里出现 `listening on`，再发送报文。`s.bind(('10.0.0.1',0))` 指定源 IP 和自动分配的源端口，帮助没有默认路由的 Mininet 主机选择广播出口。若省略它，发送到 `255.255.255.255` 可能出现 `OSError: [Errno 101] Network is unreachable`。
+
+如果选择其他源，发送命令的主机名和 `bind` 中的源 IP 都要换成该源，并在其他主机抓包。单次发送后，新安装的 20 条广播规则应各命中一次。展开页面的端口表可以查看计数。要证明某个接收端实际收到报文，查看该主机网卡的抓包结果。
 
 ## 4. 浏览器演示
 
@@ -92,3 +94,25 @@ mininet> sh ovs-ofctl -O OpenFlow13 dump-flows s1
 例如选 h1，s1 从 p1 收包，按该拓扑的默认端口编号向 p2（s2）和 p3（s6）输出。s2 从连接 s1 的 p2 收包，向 p1（h2）、p3（s3）、p4（s7）输出。实际规则以页面中的 LLDP 端口为准。
 
 排序耗时 `O(E log E)`，并查集扫描耗时接近线性，树定向和生成规则各是 `O(V)`。同一个无向树可以选不同的根，变化的是树边方向、各交换机的输入端口和输出端口，以及报文的源匹配条件。
+
+## 6. 检查算法与广播是否正确
+
+在 Ubuntu 的普通终端激活实验虚拟环境后运行算法测试。
+
+```bash
+cd ~/mininet-project2-dlc/lab
+source .venv/bin/activate
+python -m unittest -v test_broadcast.py test_paths.py
+```
+
+`test_broadcast.py` 检查有不同权重的图是否选出最小生成树，并针对 20 种广播源，验证接收主机恰好各获得一份报文。`test_paths.py` 检查原有的 DFS 路径算法。当前控制器的最短路径由 DFS 枚举得到，广播树由 Kruskal 生成。
+
+在普通终端读取广播状态与计数。
+
+```bash
+curl -fsS http://127.0.0.1:8080/api/broadcast | python3 -m json.tool
+```
+
+检查 `status` 为 `installed`，`links` 有 19 条，`total_weight` 为 19，`receivers` 有 19 台。发送一份报文后，等两至四秒，20 条规则的 `packets` 应各增加 1，`all_switches_seen` 应为 `true`。接收端网卡抓包用于确认报文已送到该主机。
+
+若两次读取之间没有其他发送者，可用计数增量检查是否有重复转发。当前计数是本次流表安装后的累计值，重新配置广播树会产生新 cookie 并重新计数。
