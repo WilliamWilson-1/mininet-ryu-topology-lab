@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import topologies
 from broadcast import broadcast_plan
-from paths import dfs_paths
+from paths import dial_shortest_path
 
 
 class TopologyTests(unittest.TestCase):
@@ -65,10 +65,10 @@ class TopologyTests(unittest.TestCase):
                     if source == target:
                         continue
                     with self.subTest(topology=name, source=source, target=target):
-                        result = dfs_paths(graph, source, target)
+                        result = dial_shortest_path({n: dict.fromkeys(ports, 1) for n, ports in graph.items()}, source, target)
                         self.assertEqual(result['shortest_hops'], distances[target])
-                        self.assertLess(result['dfs_visits'], 500000)
-                        for route in (result['shortest'], result['longest']):
+                        self.assertEqual(result['distance'], distances[target])
+                        for route in (result['shortest'],):
                             self.assertEqual(route[0], source)
                             self.assertEqual(route[-1], target)
                             self.assertEqual(len(route), len(set(route)))

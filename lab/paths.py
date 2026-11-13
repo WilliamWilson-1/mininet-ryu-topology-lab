@@ -1,47 +1,56 @@
-"""Exact DFS enumeration of simple paths, with an explicit resource limit."""
-import time
+"""Dijkstra shortest paths using Dial's cyclic buckets for integer costs."""
+from collections import deque
 
 
-class SearchLimit(RuntimeError):
-    pass
-
-
-def dfs_paths(graph, source, target, max_visits=500000, seconds=5,
-              cooperate=lambda: None):
+def dial_shortest_path(graph, source, target, cooperate=lambda: None):
+    """graph[u][v] is a nonnegative integer cost, independent of OVS ports."""
     if source not in graph or target not in graph:
         raise ValueError('源或目的交换机不在已发现拓扑中')
-    start = time.monotonic()
-    shortest = longest = None
-    path = [source]
-    visited = {source}
-    count = visits = 0
+    maximum = 0
+    for neighbors in graph.values():
+        for neighbor, cost in neighbors.items():
+            if neighbor not in graph:
+                raise ValueError('链路端点不在拓扑中')
+            if type(cost) is not int or cost < 0:
+                raise ValueError('Dial 要求非负整数链路权重')
+            maximum = max(maximum, cost)
 
-    def walk(node):
-        nonlocal shortest, longest, count, visits
-        visits += 1
-        if visits > max_visits or time.monotonic() - start > seconds:
-            raise SearchLimit('DFS 超出预算；没有返回或下发未经证明的最长路')
-        if visits % 1000 == 0:
+    buckets = [deque() for _ in range(maximum + 1)]
+    distances = {source: 0}
+    predecessors = {}
+    settled = set()
+    buckets[0].append((0, source))
+    current, pending, relaxations = 0, 1, 0
+    while pending:
+        bucket = buckets[current % len(buckets)]
+        if not bucket:
+            current += 1
+            continue
+        distance, node = bucket.popleft()
+        pending -= 1
+        # Improved labels leave old entries behind until their bucket is read.
+        if node in settled or distance != distances[node]:
+            continue
+        settled.add(node)
+        if len(settled) % 128 == 0:
             cooperate()
         if node == target:
-            count += 1
-            if shortest is None or len(path) < len(shortest):
-                shortest = list(path)
-            if longest is None or len(path) > len(longest):
-                longest = list(path)
-            return
-        for neighbor in sorted(graph[node]):
-            if neighbor not in visited:
-                visited.add(neighbor)
-                path.append(neighbor)
-                walk(neighbor)
-                path.pop()
-                visited.remove(neighbor)
-
-    walk(source)
-    if shortest is None:
+            break
+        for neighbor, cost in sorted(graph[node].items()):
+            candidate = distance + cost
+            if candidate < distances.get(neighbor, float('inf')):
+                distances[neighbor] = candidate
+                predecessors[neighbor] = node
+                buckets[candidate % len(buckets)].append((candidate, neighbor))
+                pending += 1
+                relaxations += 1
+    if target not in settled:
         raise ValueError('源和目的之间没有可达路径')
-    return dict(shortest=shortest, longest=longest,
-                shortest_hops=len(shortest) - 1,
-                longest_hops=len(longest) - 1,
-                simple_path_count=count, dfs_visits=visits, exact=True)
+    path = [target]
+    while path[-1] != source:
+        path.append(predecessors[path[-1]])
+    path.reverse()
+    return dict(shortest=path, shortest_hops=len(path) - 1,
+                distance=distances[target], settled_count=len(settled),
+                relaxations=relaxations, bucket_count=len(buckets),
+                algorithm='dijkstra-dial', exact=True)

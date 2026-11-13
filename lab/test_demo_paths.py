@@ -5,11 +5,11 @@ from pathlib import Path
 import shutil
 import subprocess
 import unittest
-from paths import dfs_paths
+from paths import dial_shortest_path
 from topologies import topology_catalog
 
 
-@unittest.skipUnless(shutil.which('node'), 'Node is optional; needed for browser DFS checks')
+@unittest.skipUnless(shutil.which('node'), 'Node is optional; needed for browser Dial checks')
 class DemoPathTests(unittest.TestCase):
     def test_all_pairs_match_controller_and_bfs(self):
         root = Path(__file__).resolve().parent.parent
@@ -24,12 +24,18 @@ const scope=vm.createContext({performance,setTimeout,DEMO_EDGES:edges});vm.runIn
  const results=[];
  for(let a=1;a<=20;a++)for(let b=1;b<=20;b++)if(a!==b){
   const r=await scope.calculateDemoPaths('h'+a,'h'+b);
-  for(const p of [r.shortest,r.longest]){
+  for(const p of [r.shortest]){
    assert.equal(p[0],a);assert.equal(p.at(-1),b);assert.equal(new Set(p).size,p.length);
    for(let i=1;i<p.length;i++)assert(edges.some(([x,y])=>(x===p[i-1]&&y===p[i])||(y===p[i-1]&&x===p[i])));
   }results.push(r);
  }
  for(const args of [['h1','h1'],['h0','h20'],['h1','h21'],['h1','h20',[]]])await assert.rejects(scope.calculateDemoPaths(...args));
+ const weighted=await scope.calculateDemoPaths('h1','h20',[[1,2,5],[1,3,1],[3,2,1],[2,20,8]]);
+ assert.equal(weighted.distance,10);
+ assert.deepEqual(Array.from(weighted.shortest),[1,3,2,20]);
+ const zero=await scope.calculateDemoPaths('h1','h20',[[1,2,0],[2,20,0],[20,1,0]]);
+ assert.equal(zero.distance,0);
+ await assert.rejects(scope.calculateDemoPaths('h1','h20',[[1,20,-1]]));
  console.log(JSON.stringify(results));
 })().catch(e=>{console.error(e);process.exitCode=1});
 '''
@@ -49,9 +55,9 @@ const scope=vm.createContext({performance,setTimeout,DEMO_EDGES:edges});vm.runIn
                     self.assertEqual(len(results), 380)
                     for actual in results:
                         a, b = int(actual['src'][1:]), int(actual['dst'][1:])
-                        expected = dfs_paths(graph, a, b)
-                        for key in ('shortest', 'longest', 'shortest_hops', 'longest_hops',
-                                    'simple_path_count', 'dfs_visits', 'exact'):
+                        expected = dial_shortest_path({n: dict.fromkeys(neighbors, 1) for n, neighbors in graph.items()}, a, b)
+                        for key in ('shortest', 'shortest_hops', 'distance', 'settled_count',
+                                    'relaxations', 'bucket_count', 'algorithm', 'exact'):
                             self.assertEqual(actual[key], expected[key], (page, a, b, key))
                         distance, queue = {a: 0}, deque([a])
                         while queue:

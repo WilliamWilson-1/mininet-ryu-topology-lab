@@ -1,6 +1,6 @@
-# Project 2 · Kruskal 广播实验
+# Project 2 · Dial 最短路与 Kruskal 广播实验
 
-从 Project 1 的 Ryu 和 Mininet 环境开始。控制器仍使用 OpenFlow 1.3 和 LLDP。实验新增一条可重新配置的广播业务，任选 h1 到 h20 中一台作为源，覆盖其余 19 台主机。
+从 Project 1 的 Ryu 和 Mininet 环境开始。控制器仍使用 OpenFlow 1.3 和 LLDP。单播采用 Dial 桶式 Dijkstra 计算并配置双向最短路。广播采用 Kruskal 最小生成树，任选 h1 到 h20 中一台作为源，覆盖其余 19 台主机。
 
 ## 1. 在 Ubuntu 上准备实验环境
 
@@ -88,7 +88,7 @@ mininet> sh ovs-ofctl -O OpenFlow13 dump-flows s1
 2. `broadcast.py` 的 `kruskal_tree()` 将双向链路合并为无向边，按 `(权重, 较小 DPID, 较大 DPID)` 排序。实验链路统一为 10 Mbit/s、1 ms，因此每条边权重取 1。同权按编号排序，让结果可复现。
 3. 并查集最初让每台交换机独立成组。扫描一条边时，查询两端所属组。不同组就选边并合并两组，同组就跳过以免成环。查询使用路径压缩，合并时将小组挂到大组。20 个顶点连成树需要 19 条边，本实验的最小总权重为 19。
 4. `broadcast_plan()` 使用队列从源交换机遍历树，把每条边定向为父到子。根从源主机端口收包，只向子交换机输出。非根从父交换机端口收包，向本地主机及全部子交换机输出。每个非根恰有一个父节点，因此一份匹配的报文在每条树边上只传一次。
-5. `install_broadcast()` 下发优先级 110 的 OpenFlow 规则。匹配入端口、源主机 MAC 和 IPv4 地址、目的广播 MAC、IPv4 目的地址 `255.255.255.255`、UDP 协议和目的端口 `5005`。按需列出多个 `OUTPUT`，由交换机复制报文。优先级 100 的 Project 1 单播规则保留自己的匹配条件和 cookie。
+5. `install_broadcast()` 下发优先级 110 的 OpenFlow 规则。匹配入端口、源主机 MAC 和 IPv4 地址、目的广播 MAC、IPv4 目的地址 `255.255.255.255`、UDP 协议和目的端口 `5005`。按需列出多个 `OUTPUT`，由交换机复制报文。单播使用优先级 100 的双向最短路规则，通过独立 cookie 管理。
 6. 控制器先给 19 个非根交换机下发规则并等待 Barrier，最后下发并确认根规则。出错时按新 cookie 撤回本批规则。重新配置时替换旧业务，LLDP 拓扑变化或交换机重连时将原业务标记为失效，需重新配置。Barrier 表示该连接上之前的请求已处理，实际收包要通过计数和抓包验证。
 
 例如选 h1，s1 从 p1 收包，按该拓扑的默认端口编号向 p2（s2）和 p3（s6）输出。s2 从连接 s1 的 p2 收包，向 p1（h2）、p3（s3）、p4（s7）输出。实际规则以页面中的 LLDP 端口为准。
@@ -105,7 +105,7 @@ source .venv/bin/activate
 python -m unittest -v test_broadcast.py test_paths.py
 ```
 
-`test_broadcast.py` 检查有不同权重的图是否选出最小生成树，并针对 20 种广播源，验证接收主机恰好各获得一份报文。`test_paths.py` 检查原有的 DFS 路径算法。当前控制器的最短路径由 DFS 枚举得到，广播树由 Kruskal 生成。
+`test_broadcast.py` 检查有不同权重的图是否选出最小生成树，并针对 20 种广播源，验证接收主机恰好各获得一份报文。`test_paths.py` 用 Floyd–Warshall 独立核对 Dial 最短路，并检查不同权重、零权环、距离更新和循环桶复用。广播树由 Kruskal 生成。
 
 在普通终端读取广播状态与计数。
 
@@ -174,3 +174,35 @@ http://127.0.0.1:8766/?demo=1&topology=campus
 ```bash
 python -m unittest -v test_topologies.py test_broadcast.py test_paths.py
 ```
+
+## 8. 配置并验证 Dijkstra 最短路
+
+在页面选择两台不同主机，点击“计算路径”，即可查看 Dial 桶式 Dijkstra 得到的最短路、路径代价、已确定节点数、成功松弛次数和循环桶数量。点击“配置最短路”下发双向 IPv4 流表。
+
+从普通终端可以调用同一组接口。
+
+```bash
+curl -fsS 'http://127.0.0.1:8080/api/paths?src=h1&dst=h20' | python3 -m json.tool
+curl -fsS http://127.0.0.1:8080/api/services \
+  -H 'Content-Type: application/json' -d '{"src":"h1","dst":"h20"}' | python3 -m json.tool
+```
+
+默认网格的 h1→h20 最短路为 `s1→s2→s3→s4→s5→s10→s15→s20`，交换机间共 7 跳、代价 7。结果的 `algorithm` 为 `dijkstra-dial`，`shortest` 是计算路径，安装后的 `path` 是实际下发路径。每条链路统一代价为 1，因此路径代价等于交换机间跳数。
+
+在 Mininet CLI 发送 ICMP，并读取实际流表。
+
+```text
+mininet> h1 ping -c 5 h20
+mininet> sh ovs-ofctl -O OpenFlow13 dump-flows s1
+mininet> sh ovs-ofctl -O OpenFlow13 dump-flows s20
+```
+
+默认 h1↔h20 经过 8 台交换机，每台安装正反两条规则，共 16 条优先级 100 的业务规则。在页面“业务监测”查看各跳双向命中计数，继续运行第 3 节的 UDP 广播验证。广播业务也会显示在“业务监测”中，可点击“查看广播树”切回树视图。
+
+`paths.py` 的 `dial_shortest_path()` 接受权重邻接表 `costs[u][v]`。控制器的 `graph[u][v]` 存放 OpenFlow 端口，因此在调用算法前单独建立每条边代价为 1 的权重表。
+
+Dial 使用 `W+1` 个循环桶，W 是最大边权。暂定距离 d 的节点进入 `buckets[d % (W+1)]`。距离指针从小到大扫描，取出最近的候选节点，尝试用 `dist[u]+cost(u,v)` 改进邻居的暂定距离。改进成功就记录前驱并加入对应桶，过期的旧候选会在取出时跳过。目的节点被确定后，通过前驱表逆向恢复路径。
+
+算法支持非负整数权重，本实验 W=1，因此使用两个循环桶。桶扫描与边松弛的总复杂度为 `O(E+VW)`，同权时按邻居编号与桶内 FIFO 顺序确定一条可复现的最短路。算法测试包含不同权重，以便验证 Dial 的距离更新与桶循环逻辑。
+
+真实实验升级后，按第 7 节退出 Mininet 和 Ryu，再从当前分支更新并重新启动两端，重新配置业务。

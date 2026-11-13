@@ -1,4 +1,4 @@
-"""Teaching controller: LLDP discovery, exact DFS, bidirectional IPv4 and MST broadcast flows."""
+"""Teaching controller: LLDP discovery, Dial shortest paths and MST broadcast flows."""
 import json
 import time
 from collections import deque
@@ -13,7 +13,7 @@ from ryu.lib.packet import packet, ethernet, ether_types
 from ryu.topology.api import get_switch, get_link
 from ryu.app.wsgi import WSGIApplication, ControllerBase, route
 from webob import Response
-from paths import dfs_paths, SearchLimit
+from paths import dial_shortest_path
 from topologies import load_topology, topology_catalog
 from broadcast import (broadcast_plan, BROADCAST_COOKIE, BROADCAST_COOKIE_MASK,
                        BROADCAST_MAC, BROADCAST_IP, BROADCAST_PORT, BROADCAST_PRIORITY)
@@ -286,7 +286,8 @@ class LabController(app_manager.RyuApp):
             raise ValueError('主机尚未通过 PacketIn 被发现，请重新执行探测')
         version = self.version
         graph = {node: dict(ports) for node, ports in self.graph.items()}
-        result = dfs_paths(graph, a, b, cooperate=lambda: hub.sleep(0))
+        costs = {node: dict.fromkeys(ports, 1) for node, ports in graph.items()}
+        result = dial_shortest_path(costs, a, b, cooperate=lambda: hub.sleep(0))
         self.refresh()
         if version != self.version:
             raise ValueError('搜索期间拓扑发生变化，请重试')
@@ -301,7 +302,7 @@ class LabController(app_manager.RyuApp):
             key = 'h%d-h%d' % (low, high)
             self.next_cookie += 1
             cookie = self.next_cookie
-            path = result['longest']
+            path = result['shortest']
             old_service = self.services.pop(key, None)
             if old_service:
                 self.remove_cookie(old_service['cookie'])
@@ -336,7 +337,7 @@ class LabController(app_manager.RyuApp):
                                path=path, created_at=time.time())
                 self.services[key] = service
                 self.emit('service', '·', 0,
-                          '业务 %s 下发完成，%d 跳最长路、%d 条 FlowMod、'
+                          '业务 %s 下发完成，%d 跳 Dial 最短路、%d 条 FlowMod、'
                           '%d 条 Barrier 全部收到回复' %
                           (key, len(path) - 1, 2 * len(path), len(path)))
                 return service
@@ -497,8 +498,6 @@ class LabAPI(ControllerBase):
         try:
             result, _ = self.lab.compute(req.params['src'], req.params['dst'])
             return self.response(result)
-        except SearchLimit as exc:
-            return self.response({'error': str(exc), 'exact': False}, 422)
         except (ValueError, KeyError) as exc:
             return self.response({'error': str(exc)}, 400)
 
@@ -512,8 +511,6 @@ class LabAPI(ControllerBase):
             data = req.json
             service = self.lab.install(data['src'], data['dst'])
             return self.response(service)
-        except SearchLimit as exc:
-            return self.response({'error': str(exc), 'exact': False}, 422)
         except (ValueError, KeyError) as exc:
             return self.response({'error': str(exc)}, 400)
 
