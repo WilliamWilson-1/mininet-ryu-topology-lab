@@ -186,7 +186,7 @@
 </section>
 
 <div class="metrics" aria-label="网络概览"><article class="metric content"><div class="metric-label">交换机<svg class="icon" aria-hidden="true"><use href="#i-network"/></svg></div><div class="metric-number"><strong class="mono" id="metric-switches">—</strong><span>/ 20 已发现</span></div></article><article class="metric content"><div class="metric-label">主机<svg class="icon" aria-hidden="true"><use href="#i-monitor"/></svg></div><div class="metric-number"><strong class="mono" id="metric-hosts">—</strong><span>/ 20 已发现</span></div></article><article class="metric content"><div class="metric-label">网络链路<svg class="icon" aria-hidden="true"><use href="#i-link"/></svg></div><div class="metric-number"><strong class="mono" id="metric-links">—</strong><span>交换机间</span></div></article><article class="metric content"><div class="metric-label">已配置业务<svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg></div><div class="metric-number"><strong class="mono" id="metric-services">—</strong><span>单播与广播</span></div></article></div>
-<div class="view-tabs glass" id="tabs" role="tablist" aria-label="实验视图"><span class="tab-thumb" aria-hidden="true" id="tab-thumb"></span><button class="tab" id="tab-topology" role="tab" aria-selected="true" aria-controls="panel-topology" data-view="topology"><svg class="icon" aria-hidden="true"><use href="#i-network"/></svg>网络拓扑</button><button class="tab" id="tab-paths" role="tab" aria-selected="false" aria-controls="panel-paths" tabindex="-1" data-view="paths"><svg class="icon" aria-hidden="true"><use href="#i-route"/></svg>路径分析</button><button class="tab" id="tab-services" role="tab" aria-selected="false" aria-controls="panel-services" tabindex="-1" data-view="services"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>业务监测</button><button class="tab" id="tab-events" role="tab" aria-selected="false" aria-controls="panel-events" tabindex="-1" data-view="events"><svg class="icon" aria-hidden="true"><use href="#i-pulse"/></svg>报文与流表</button></div>
+<div class="view-tabs glass" id="tabs" role="tablist" aria-label="实验视图"><span class="tab-thumb" aria-hidden="true" id="tab-thumb"></span><button class="tab" id="tab-topology" role="tab" aria-selected="true" aria-controls="panel-topology" data-view="topology"><svg class="icon" aria-hidden="true"><use href="#i-network"/></svg>网络拓扑</button><button class="tab" id="tab-paths" role="tab" aria-selected="false" aria-controls="panel-paths" tabindex="-1" data-view="paths"><svg class="icon" aria-hidden="true"><use href="#i-route"/></svg>路径分析</button><button class="tab" id="tab-services" role="tab" aria-selected="false" aria-controls="panel-services" tabindex="-1" data-view="services"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>业务监测</button><button class="tab" id="tab-events" role="tab" aria-selected="false" aria-controls="panel-events" tabindex="-1" data-view="events"><svg class="icon" aria-hidden="true"><use href="#i-pulse"/></svg>报文与流表</button><button class="tab" id="tab-balance" role="tab" aria-selected="false" aria-controls="panel-balance" tabindex="-1" data-view="balance" hidden>负载均衡</button></div>
 <form class="planner glass" id="planner"><div class="field"><label for="src">源主机</label><select id="src"></select></div><button type="button" class="icon-button swap-button" id="swap" aria-label="交换源主机与目的主机"><svg class="icon" aria-hidden="true"><use href="#i-swap"/></svg></button><div class="field"><label for="dst">目的主机</label><select id="dst"></select></div><button type="submit" class="button" id="search"><svg class="icon" aria-hidden="true"><use href="#i-route"/></svg><span>计算路径</span></button><button type="button" class="button primary" id="install"><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg><span>配置最短路</span></button></form>
 <div class="feedback" id="feedback" hidden><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg><p id="message" role="status" aria-live="polite"></p></div>
 <section id="panel-topology" class="panel" role="tabpanel" aria-labelledby="tab-topology" tabindex="0">
@@ -218,7 +218,36 @@
 <article class="comparison content"><p class="eyebrow">DIAL / 循环桶</p><h2>按距离递增处理节点</h2><p id="dial-evidence" class="inspector-note"></p><p class="inspector-note">将候选距离 d 放入 d mod (W+1) 号桶，逐步取出最近节点并松弛相邻边，通过前驱表还原最短路。本实验 W=1。</p></article>
 </div><div class="analysis-note content"><p id="analysis-evidence"></p><p id="analysis-next" style="margin-top:8px"></p></div></div></section>
 <section id="panel-services" class="panel" role="tabpanel" aria-labelledby="tab-services" tabindex="0" hidden><div class="panel-head" style="padding:0"><div><h2>已配置业务</h2><p>沿路径查看每台交换机的双向流量证据。</p></div><span class="badge" id="service-count">0 项业务</span></div><div id="broadcast-service" class="service-list"></div><div class="filter-bar"><label class="filter-wrap glass" for="service-search"><svg class="icon muted" aria-hidden="true"><use href="#i-search"/></svg><input class="filter-input" id="service-search" type="search" placeholder="搜索主机，例如 h1 或 h20" aria-label="搜索主机业务"></label><select class="filter-state glass" id="service-state" aria-label="筛选业务状态"><option value="all">全部状态</option><option value="installed">已配置</option><option value="seen">计数已验证</option><option value="stale">拓扑已变化</option></select><button class="button" id="clear-filter" hidden>清除筛选</button></div><div class="service-list" id="services"></div><p class="services-note">每 2 秒刷新。绿色表示近期读取的累计计数证据，不代表此刻持续发送；端到端通信请以 ping 验证。</p></section>
-<section id="panel-events" class="panel" role="tabpanel" aria-labelledby="tab-events" tabindex="0" hidden><div class="panel-head" style="padding:0"><div><h2>OpenFlow 报文流</h2><p>控制器与交换机之间的控制平面报文:握手、LLDP 发现、PacketIn、FlowMod、Barrier 与统计采样。点击条目可展开详情,可用类型按钮筛选。</p></div><span class="badge mono" id="events-count">0 条</span></div><div class="filter-bar"><div class="event-filters" id="event-filters"></div><label class="check-label" style="flex:none;min-height:44px;padding:0 6px"><input type="checkbox" id="events-autoscroll" checked>自动滚动</label><button class="button" id="events-clear">清空列表</button></div><div class="event-log" id="event-log"></div><div class="panel-head" style="padding:0;margin-top:28px"><div><h2>交换机流表</h2><p>通过 Ryu ofctl_rest 读取真实流表,等价于 ovs-ofctl dump-flows;单播 priority=100，广播 priority=110，LLDP 规则 priority=65535。</p></div><span class="badge mono" id="flow-caption-badge">—</span></div><div class="filter-bar"><select class="filter-state glass" id="flow-switch" aria-label="选择交换机"></select><button class="button primary" id="flow-refresh">读取流表</button></div><div class="table-wrap content" id="flow-table-wrap"><table><caption id="flow-caption">尚未读取</caption><thead><tr><th>优先级</th><th>匹配 match</th><th>动作 actions</th><th>数据包</th><th>字节</th></tr></thead><tbody id="flow-rows"></tbody></table></div></section>
+<section id="panel-events" class="panel" role="tabpanel" aria-labelledby="tab-events" tabindex="0" hidden><div class="panel-head" style="padding:0"><div><h2>OpenFlow 报文流</h2><p>控制器与交换机之间的控制平面报文:握手、LLDP 发现、PacketIn、FlowMod、Barrier 与统计采样。点击条目可展开详情,可用类型按钮筛选。</p></div><span class="badge mono" id="events-count">0 条</span></div><div class="filter-bar"><div class="event-filters" id="event-filters"></div><label class="check-label" style="flex:none;min-height:44px;padding:0 6px"><input type="checkbox" id="events-autoscroll" checked>自动滚动</label><button class="button" id="events-clear">清空列表</button></div><div class="event-log" id="event-log"></div><div class="panel-head" style="padding:0;margin-top:28px"><div><h2>交换机流表</h2><p>通过 Ryu ofctl_rest 读取真实流表,等价于 ovs-ofctl dump-flows;单播 priority=100，负载均衡 priority=105，广播 priority=110，LLDP 规则 priority=65535。</p></div><span class="badge mono" id="flow-caption-badge">—</span></div><div class="filter-bar"><select class="filter-state glass" id="flow-switch" aria-label="选择交换机"></select><button class="button primary" id="flow-refresh">读取流表</button></div><div class="table-wrap content" id="flow-table-wrap"><table><caption id="flow-caption">尚未读取</caption><thead><tr><th>优先级</th><th>匹配 match</th><th>动作 actions</th><th>数据包</th><th>字节</th></tr></thead><tbody id="flow-rows"></tbody></table></div></section>
+<section id="panel-balance" class="panel" role="tabpanel" aria-labelledby="tab-balance" tabindex="0" hidden>
+ <div class="panel-head" style="padding:0"><div><h2>负载均衡</h2><p>比较同一批 10 条流的最短路和负载均衡方案。</p></div></div>
+ <article class="broadcast-card content">
+  <form class="broadcast-controls" id="balance-form">
+   <div class="field"><label for="balance-seed">随机种子</label><input id="balance-seed" type="number" min="0" max="4294967295" value="17" required></div>
+   <button class="button" type="submit" id="balance-plan">计算方案</button>
+   <button class="button" type="button" data-balance-mode="baseline">安装最短路</button>
+   <button class="button primary" type="button" data-balance-mode="balanced">安装均衡路径</button>
+   <button class="button" type="button" id="balance-clear" disabled>撤回实验流表</button>
+  </form>
+  <p id="balance-status" role="status">等待控制器连接。</p>
+  <p id="balance-peaks" class="mono"></p>
+  <p class="muted">安装路径后，从 Mininet 运行 iperf3 才会产生流量。端口计数包含该方向上的全部流量。</p>
+ </article>
+ <article class="broadcast-card content">
+  <h3>有向链路利用率</h3>
+  <div class="table-wrap"><table>
+   <thead><tr><th>链路</th><th>出端口</th><th>最短路计划</th><th>均衡计划</th><th>当前端口实测</th></tr></thead>
+   <tbody id="balance-links"></tbody>
+  </table></div>
+ </article>
+ <article class="broadcast-card content">
+  <h3>流量需求与路径</h3>
+  <div class="table-wrap"><table>
+   <thead><tr><th>流量</th><th>目标速率</th><th>服务端口</th><th>最短路</th><th>均衡路径</th></tr></thead>
+   <tbody id="balance-demands"></tbody>
+  </table></div>
+ </article>
+</section>
 <footer class="page-footer"><span>Mininet × Ryu · Dijkstra 最短路与 Kruskal 广播实验</span><span id="update-time" class="mono">等待数据</span></footer></main></div>
 <dialog class="drawer" id="service-dialog" aria-labelledby="detail-title"><div class="drawer-head glass"><h2>业务详情</h2><button class="icon-button" id="close-dialog" aria-label="关闭业务详情"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="drawer-body"><p class="eyebrow">SERVICE / 双向通信</p><h2 class="drawer-title mono" id="detail-title"></h2><p class="drawer-intro" id="detail-status"></p><div class="detail-route"><h3>已配置最短路</h3><div class="path-chips" id="detail-chips"></div></div><div class="table-wrap" tabindex="0" role="region" aria-label="可横向滚动的每跳双向计数"><table><caption>每跳双向流表计数(速率由相邻两次采样差分)</caption><thead><tr><th>交换机</th><th>源主机</th><th>数据包</th><th>字节</th><th>速率 包/秒</th><th>速率 bps</th><th>采样状态</th></tr></thead><tbody id="detail-counters"></tbody></table></div><details class="raw-data"><summary>查看原始计数数据</summary><pre id="counters"></pre></details><p class="drawer-note">计数是当前流表安装后的累计值。流表下发与计数存在不能替代端到端连通性检查。</p></div></dialog>
 <script>
@@ -601,11 +630,88 @@ async function action(install){
  }catch(e){msg(e.name==='AbortError'?'请求超时。请检查控制器状态后重试。':e.message,true)}finally{busy=false;button.removeAttribute('aria-busy');span.textContent=install?'配置最短路':'计算路径';setControls()}
 }
 $('planner').onsubmit=e=>{e.preventDefault();action(false)};$('install').onclick=()=>action(true);$('retry').onclick=refresh;$('refresh').onclick=refresh;
+let balancePlan=null,balanceExperiment=null,balanceBusy=false,balancePolling=false,balanceError='';
+const balanceSeed=$('balance-seed');
+const balanceControls=[...$('balance-form').querySelectorAll('button,input')];
+
+function renderBalance(){
+ for(const control of balanceControls)control.disabled=!connected||balanceBusy||balancePolling;
+ $('balance-clear').disabled=!connected||balanceBusy||balancePolling||!balanceExperiment;
+ const plan=balancePlan||balanceExperiment;
+ const active=plan&&balanceExperiment?.seed===plan.seed&&balanceExperiment.topology_version===plan.topology_version
+  ?balanceExperiment:null;
+ const state=active?.status==='stale'?active.reason:active
+  ?'已安装'+(active.mode==='baseline'?'最短路':'均衡路径')+' · 种子 '+active.seed
+  :plan?'已计算 · 种子 '+plan.seed:'选择种子并计算方案。';
+ text('balance-status',balanceError||(!connected?'等待控制器连接。':state));
+ const percentage=(mbps)=>mbps==null?'—':(mbps*100/plan.capacity_mbps).toFixed(1)+'%';
+ const actual=active?.status==='installed'?active.links.map(row=>row.measured_mbps).filter(value=>value!=null):[];
+ text('balance-peaks',plan?'最短路计划峰值 '+percentage(plan.baseline_peak_mbps)+
+  ' · 均衡计划峰值 '+percentage(plan.balanced_peak_mbps)+
+  ' · 当前实测峰值 '+(actual.length?percentage(Math.max(...actual))+'（'+actual.length+'/'+plan.links.length+' 个方向）':'等待采样'):'');
+ const measured=new Map((active?.links||[]).map(e=>[e.src+'-'+e.dst,e.measured_mbps]));
+ const fill=(id,rows)=>{
+  const body=$(id);
+  body.replaceChildren(...rows.map(values=>{
+   const row=node('tr');
+   for(const value of values)row.append(node('td','mono',value));
+   return row;
+  }));
+ };
+ fill('balance-links',(plan?.links||[]).map(e=>['s'+e.src+' → s'+e.dst,e.port,
+  percentage(e.baseline_mbps),percentage(e.balanced_mbps),percentage(measured.get(e.src+'-'+e.dst))]));
+ fill('balance-demands',(plan?.demands||[]).map(f=>[f.id+' · h'+f.src+' → h'+f.dst,
+  f.rate_mbps+' Mbps',f.port,pathText(f.baseline_path),pathText(f.balanced_path)]));
+}
+async function pollBalance(){
+ if(demo||currentView!=='balance'||!connected||balanceBusy||balancePolling)return;
+ balancePolling=true;
+ try{
+  const data=await api('/api/load-balance');
+  if(!balanceBusy){
+   balanceError='';
+   balanceExperiment=data.experiment;
+  }
+ }catch(error){
+  if(!balanceBusy){balanceExperiment=null;balanceError=error.message}
+ }finally{
+  balancePolling=false;
+  renderBalance();
+ }
+}
+async function changeBalance(action){
+ if(!connected||balanceBusy||balancePolling||(action!=='clear'&&!balanceSeed.reportValidity()))return;
+ balanceBusy=true;balanceError='';renderBalance();
+ try{
+  const seed=Number(balanceSeed.value),url='/api/load-balance';
+  if(action==='plan'){
+   balancePlan=await api(url+'/plan?'+new URLSearchParams({seed}));
+  }else if(action==='clear'){
+   balanceExperiment=(await api(url+'?'+new URLSearchParams({id:balanceExperiment.id}),
+    {method:'DELETE'})).experiment;
+  }else{
+   const result=await api(url,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({seed,mode:action})});
+   balancePlan=null;balanceExperiment=result.experiment;
+  }
+ }catch(error){
+  balanceError=error.message;
+ }finally{
+  balanceBusy=false;renderBalance();
+ }
+}
+$('balance-form').onsubmit=event=>{event.preventDefault();changeBalance('plan')};
+document.querySelectorAll('[data-balance-mode]').forEach(button=>{
+ button.onclick=()=>changeBalance(button.dataset.balanceMode);
+});
+$('balance-clear').onclick=()=>changeBalance('clear');
+
 // Tab slider: actual button geometry, horizontal capture, preview until release.
-const tabs=[...document.querySelectorAll('.tab')],track=$('tabs'),thumb=$('tab-thumb');let drag=null,suppressClickUntil=0;
+$('tab-balance').hidden=demo;
+const tabs=[...document.querySelectorAll('.tab:not([hidden])')],track=$('tabs'),thumb=$('tab-thumb');let drag=null,suppressClickUntil=0;
 function thumbAt(index,scale=1){const tab=tabs[index];thumb.style.width=tab.offsetWidth+'px';thumb.style.height=tab.offsetHeight+'px';thumb.style.transform=`translateX(${tab.offsetLeft}px) scale(${scale})`}
 function cancelDrag(){const old=drag;drag=null;track.classList.remove('dragging');if(old&&track.hasPointerCapture(old.id))track.releasePointerCapture(old.id);thumbAt(tabs.findIndex(t=>t.dataset.view===currentView))}
-function selectView(view,focus=false,updateHash=true){if(!['topology','paths','services','events'].includes(view))view='topology';cancelDrag();currentView=view;for(const tab of tabs){const active=tab.dataset.view===view;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;$('panel-'+tab.dataset.view).hidden=!active}document.querySelectorAll('.nav-button').forEach(btn=>{const active=btn.dataset.view===view;btn.classList.toggle('active',active);if(active)btn.setAttribute('aria-current','page');else btn.removeAttribute('aria-current')});thumbAt(tabs.findIndex(t=>t.dataset.view===view));if(updateHash)history.replaceState(null,'','#'+view);if(focus)$('tab-'+view).focus({preventScroll:true})}
+function selectView(view,focus=false,updateHash=true){if(!tabs.some(tab=>tab.dataset.view===view))view='topology';cancelDrag();currentView=view;for(const tab of tabs){const active=tab.dataset.view===view;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;$('panel-'+tab.dataset.view).hidden=!active}document.querySelectorAll('.nav-button').forEach(btn=>{const active=btn.dataset.view===view;btn.classList.toggle('active',active);if(active)btn.setAttribute('aria-current','page');else btn.removeAttribute('aria-current')});thumbAt(tabs.findIndex(t=>t.dataset.view===view));if(updateHash)history.replaceState(null,'','#'+view);if(focus)$('tab-'+view).focus({preventScroll:true});if(view==='balance'){renderBalance();pollBalance()}}
 for(const button of document.querySelectorAll('[data-view]'))button.addEventListener('click',e=>{if(button.classList.contains('tab')&&performance.now()<suppressClickUntil){e.preventDefault();return}selectView(button.dataset.view)});
 $('brand').onclick=e=>{e.preventDefault();selectView('topology',true)};$('view-analysis').onclick=()=>selectView('paths',true);
 track.addEventListener('keydown',e=>{if(e.key==='Escape'){cancelDrag();return}let index=tabs.findIndex(t=>t.dataset.view===currentView);if(e.key==='ArrowRight')index=(index+1)%tabs.length;else if(e.key==='ArrowLeft')index=(index+tabs.length-1)%tabs.length;else if(e.key==='Home')index=0;else if(e.key==='End')index=tabs.length-1;else return;e.preventDefault();selectView(tabs[index].dataset.view,true)});
@@ -699,7 +805,7 @@ if(demo){
   text('empty-copy','请通过 HTTP 打开页面并检查 topology 参数。');
  });
 }else{
- refresh();setInterval(refresh,2000);setInterval(refreshEvents,2000);
+ refresh().then(pollBalance);setInterval(refresh,2000);setInterval(refreshEvents,2000);setInterval(pollBalance,2000);
 }
 
 </script></body></html>

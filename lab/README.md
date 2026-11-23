@@ -2,6 +2,8 @@
 
 从 Project 1 的 Ryu 和 Mininet 环境开始。控制器仍使用 OpenFlow 1.3 和 LLDP。单播采用 Dial 桶式 Dijkstra 计算并配置双向最短路。广播采用 Kruskal 最小生成树，任选 h1 到 h20 中一台作为源，覆盖其余 19 台主机。
 
+负载均衡的双轮 iperf3 实验见 [Project 3 手册](PROJECT3.md)。
+
 ## 1. 在 Ubuntu 上准备实验环境
 
 使用能执行 `sudo` 的 Ubuntu 和 Python 3.10。本实验的依赖版本按 Ubuntu 22.04 的系统 Python 3.10 配置。
@@ -12,9 +14,9 @@ sudo apt install -y git mininet openvswitch-switch tcpdump curl \
   python3-venv python3-dev build-essential libffi-dev libssl-dev
 sudo systemctl enable --now openvswitch-switch
 /usr/bin/python3 --version
-git clone --branch project2-DLC --single-branch \
-  https://github.com/WilliamWilson-1/mininet-ryu-topology-lab.git ~/mininet-project2-dlc
-cd ~/mininet-project2-dlc/lab
+git clone --branch project3-DLC --single-branch \
+  https://github.com/WilliamWilson-1/mininet-ryu-topology-lab.git ~/mininet-project3-dlc
+cd ~/mininet-project3-dlc/lab
 /usr/bin/python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip==23.3.2 setuptools==57.5.0 wheel==0.37.1
@@ -32,7 +34,7 @@ ryu-manager --version
 
 ```bash
 # 终端 A
-cd ~/mininet-project2-dlc/lab
+cd ~/mininet-project3-dlc/lab
 source .venv/bin/activate
 export PYTHONPATH="$PWD"
 ryu-manager --observe-links --ofp-tcp-listen-port 6653 \
@@ -43,7 +45,7 @@ ryu-manager --observe-links --ofp-tcp-listen-port 6653 \
 
 ```bash
 # 终端 B
-cd ~/mininet-project2-dlc/lab
+cd ~/mininet-project3-dlc/lab
 sudo /usr/bin/python3 topo20.py
 ```
 
@@ -100,7 +102,7 @@ mininet> sh ovs-ofctl -O OpenFlow13 dump-flows s1
 在 Ubuntu 的普通终端激活实验虚拟环境后运行算法测试。
 
 ```bash
-cd ~/mininet-project2-dlc/lab
+cd ~/mininet-project3-dlc/lab
 source .venv/bin/activate
 python -m unittest -v test_broadcast.py test_paths.py
 ```
@@ -131,7 +133,7 @@ curl -fsS http://127.0.0.1:8080/api/broadcast | python3 -m json.tool
 在实验目录列出预设，选择下一次启动的拓扑。
 
 ```bash
-cd ~/mininet-project2-dlc/lab
+cd ~/mininet-project3-dlc/lab
 python3 topologies.py --list
 python3 topologies.py --select ring-chords
 ```

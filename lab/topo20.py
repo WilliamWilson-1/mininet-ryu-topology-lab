@@ -7,7 +7,7 @@ from mininet.node import RemoteController, OVSSwitch
 from mininet.link import TCLink
 from mininet.cli import CLI
 from mininet.log import setLogLevel
-from topologies import load_topology, topology_catalog
+from topologies import LINK_CAPACITY_MBPS, load_topology, topology_catalog
 
 
 class LabTopo(Topo):
@@ -20,14 +20,14 @@ class LabTopo(Topo):
             self.addHost('h%d' % i, ip='10.0.0.%d/24' % i,
                          mac='02:00:00:00:00:%02x' % i)
             # Every host-facing switch port is explicitly port 1.
-            self.addLink('s%d' % i, 'h%d' % i, port1=1, bw=10, delay='1ms')
+            self.addLink('s%d' % i, 'h%d' % i, port1=1, bw=LINK_CAPACITY_MBPS, delay='1ms')
         seen = set()
         for a, b in config['edges']:
             assert 1 <= a <= n and 1 <= b <= n and a != b
             edge = tuple(sorted((a, b)))
             assert edge not in seen, '本示例不支持平行链路或重复边'
             seen.add(edge)
-            self.addLink('s%d' % a, 's%d' % b, bw=10, delay='1ms')
+            self.addLink('s%d' % a, 's%d' % b, bw=LINK_CAPACITY_MBPS, delay='1ms')
 
 
 def main():

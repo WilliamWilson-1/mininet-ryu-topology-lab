@@ -1,8 +1,10 @@
 # Mininet + Ryu 拓扑实验 - 网络算法基础第 8 组
 
-本分支 `project2-DLC` 实现 20 台 OpenFlow 交换机、20 台主机的 SDN 实验。LLDP 发现链路与两端端口，Dial 桶式 Dijkstra 计算并配置双向最短路，Kruskal 最小生成树承载一对多广播。深蓝色可视化页面展示拓扑、算法结果、业务和流表计数。
+本分支 `project3-DLC` 实现 20 台 OpenFlow 交换机、20 台主机的 SDN 实验。LLDP 发现链路与两端端口，Dial 桶式 Dijkstra 计算并配置双向最短路，Kruskal 最小生成树承载一对多广播。深蓝色可视化页面展示拓扑、算法结果、业务和流表计数。
 
 完整安装与操作流程见 [实验手册](lab/README.md)。原实验的代码和说明保存在 [project1 分支](https://github.com/WilliamWilson-1/mininet-ryu-topology-lab/tree/project1)。
+
+Project 3 新增 10 条并发流的负载均衡和 iperf3 对比实验。操作步骤见 [Project 3 实验手册](lab/PROJECT3.md)。
 
 ## 页面与拓扑
 
@@ -15,7 +17,7 @@
 ## 获取代码
 
 ```bash
-git clone --branch project2-DLC --single-branch \
+git clone --branch project3-DLC --single-branch \
   https://github.com/WilliamWilson-1/mininet-ryu-topology-lab.git
 cd mininet-ryu-topology-lab/lab
 python3 topologies.py --list

@@ -1,4 +1,4 @@
-"""Teaching controller: LLDP discovery, Dial shortest paths and MST broadcast flows."""
+"""Teaching controller: LLDP discovery, shortest paths, MST broadcast, and load balancing."""
 import json
 import time
 from collections import deque
@@ -14,6 +14,8 @@ from ryu.topology.api import get_switch, get_link
 from ryu.app.wsgi import WSGIApplication, ControllerBase, route
 from webob import Response
 from paths import dial_shortest_path
+from load_balance import (BALANCE_COOKIE, BALANCE_COOKIE_MASK, BALANCE_PRIORITY,
+                          DEFAULT_SEED, plan_balance)
 from topologies import load_topology, topology_catalog
 from broadcast import (broadcast_plan, BROADCAST_COOKIE, BROADCAST_COOKIE_MASK,
                        BROADCAST_MAC, BROADCAST_IP, BROADCAST_PORT, BROADCAST_PRIORITY)
@@ -32,6 +34,10 @@ class LabController(app_manager.RyuApp):
         self.version = 0
         self.services = {}
         self.broadcast = None
+        self.balance = None
+        self.port_requests = {}
+        self.port_counters = {}
+        self.port_rates = {}
         self.stats = {}
         self.pending_barriers = {}
         self.pending_mods = {}
@@ -83,7 +89,10 @@ class LabController(app_manager.RyuApp):
         dp = ev.msg.datapath
         self.dps[dp.id] = dp
         self.invalidate_broadcast('交换机重新连接，请重新配置')
+        self.invalidate_balance('交换机重新连接，请重新配置')
+        self.reset_port_stats(dp.id)
         self.delete_flows(dp, BROADCAST_COOKIE, BROADCAST_COOKIE_MASK)
+        self.delete_flows(dp, BALANCE_COOKIE, BALANCE_COOKIE_MASK)
         self.emit('connect', '←', dp.id,
                   'FeaturesReply:OpenFlow 1.3 握手完成,交换机上线')
         p, o = dp.ofproto_parser, dp.ofproto
@@ -103,6 +112,8 @@ class LabController(app_manager.RyuApp):
             self.hosts.pop(dp.id, None)
             self.stats.pop(dp.id, None)
             self.invalidate_broadcast('交换机断开，请重新配置')
+            self.invalidate_balance('交换机断开，请重新配置')
+            self.reset_port_stats(dp.id)
             self.emit('state', '←', dp.id, '控制通道断开,清除该交换机状态')
 
     def flow(self, dp, priority, match, actions, cookie=0, batch=None):
@@ -163,6 +174,7 @@ class LabController(app_manager.RyuApp):
             self.fingerprint = signature
             self.version += 1
             self.invalidate_broadcast('拓扑变化，请重新配置')
+            self.invalidate_balance('拓扑变化，请重新配置')
             for service in self.services.values():
                 if service['status'] != 'stale':
                     self.remove_cookie(service['cookie'])
@@ -215,6 +227,11 @@ class LabController(app_manager.RyuApp):
                 self.refresh()
                 for dp in list(self.dps.values()):
                     dp.send_msg(dp.ofproto_parser.OFPFlowStatsRequest(dp))
+                    if self.balance and self.balance['status'] == 'installed':
+                        message = dp.ofproto_parser.OFPPortStatsRequest(dp, 0, dp.ofproto.OFPP_ANY)
+                        dp.set_xid(message)
+                        self.port_requests[dp.id] = (message.xid, time.monotonic(), {})
+                        dp.send_msg(message)
             except Exception:
                 self.logger.exception('Monitor failed')
             hub.sleep(2)
@@ -438,6 +455,113 @@ class LabController(app_manager.RyuApp):
             row['fresh'] and row['present'] and row['packets'] > 0 for row in counters)
         return dict(service, counters=counters, all_switches_seen=seen)
 
+    def plan_load_balance(self, seed):
+        self.require_full_topology()
+        return dict(plan_balance(self.graph, seed), topology_version=self.version)
+
+    def invalidate_balance(self, reason):
+        experiment = self.balance
+        if experiment and experiment['status'] == 'installed':
+            experiment.update(status='stale', reason=reason)
+            self.remove_cookie(int(experiment['id'], 16))
+
+    def clear_load_balance(self, expected_id):
+        with self.lock:
+            if self.balance and self.balance['id'] == expected_id:
+                self.invalidate_balance('实验结束')
+                self.balance = None
+
+    def install_load_balance(self, seed, mode):
+        if mode not in ('baseline', 'balanced'):
+            raise ValueError('mode 必须是 baseline 或 balanced')
+        with self.lock:
+            plan = self.plan_load_balance(seed)
+            if self.expected_nodes - self.hosts.keys():
+                raise ValueError('请等待全部主机通过 PacketIn 被发现')
+            datapaths = {node: self.dps[node] for node in self.graph}
+            graph = self.graph
+            self.invalidate_balance('切换负载均衡方案')
+            self.next_cookie += 1
+            cookie = BALANCE_COOKIE | self.next_cookie
+            batch = dict(mods=[], barriers=[], errors=[])
+            try:
+                for demand in plan['demands']:
+                    path = demand[mode + '_path']
+                    for reverse, nodes in ((False, path), (True, path[::-1])):
+                        source, target = nodes[0], nodes[-1]
+                        for index, node in enumerate(nodes):
+                            incoming = (graph[node][nodes[index-1]] if index
+                                        else self.hosts[node]['port'])
+                            outgoing = (graph[node][nodes[index+1]] if index+1 < len(nodes)
+                                        else self.hosts[node]['port'])
+                            dp = datapaths[node]
+                            parser = dp.ofproto_parser
+                            for protocol, field in ((6, 'tcp'), (17, 'udp')):
+                                server_port = field + ('_src' if reverse else '_dst')
+                                match = parser.OFPMatch(
+                                    in_port=incoming, eth_type=ether_types.ETH_TYPE_IP,
+                                    ipv4_src=self.hosts[source]['ip'], ipv4_dst=self.hosts[target]['ip'],
+                                    ip_proto=protocol, **{server_port: demand['port']})
+                                self.flow(dp, BALANCE_PRIORITY, match,
+                                          [parser.OFPActionOutput(outgoing)], cookie, batch)
+                self.confirm_flows(datapaths.values(), batch)
+                self.refresh()
+                if self.version != plan['topology_version'] or any(
+                        self.dps.get(node) is not dp for node, dp in datapaths.items()):
+                    raise ValueError('下发期间拓扑或交换机连接发生变化')
+                self.balance = dict(plan, mode=mode, id=hex(cookie), status='installed',
+                                    installed_at=time.monotonic())
+            except Exception:
+                self.remove_cookie(cookie)
+                raise
+            finally:
+                self.clear_batch(batch)
+            return self.load_balance_status()
+
+    def reset_port_stats(self, dpid):
+        self.port_requests.pop(dpid, None)
+        self.port_counters.pop(dpid, None)
+        self.port_rates.pop(dpid, None)
+
+    @set_ev_cls(ofp_event.EventOFPPortStatsReply, MAIN_DISPATCHER)
+    def port_stats(self, ev):
+        msg = ev.msg
+        dp = msg.datapath
+        request = self.port_requests.get(dp.id)
+        if self.dps.get(dp.id) is not dp or request is None or request[0] != msg.xid:
+            return
+        _, sampled, counters = request
+        unsupported = (1 << 64) - 1
+        counters.update((row.port_no, row.tx_bytes) for row in msg.body
+                        if row.tx_bytes != unsupported)
+        if msg.flags & dp.ofproto.OFPMPF_REPLY_MORE:
+            return
+        self.port_requests.pop(dp.id)
+        previous_time, previous = self.port_counters.get(dp.id, (sampled, {}))
+        interval = sampled - previous_time
+        self.port_counters[dp.id] = (sampled, counters)
+        rates = {}
+        if interval > 0:
+            rates = {port: 8 * (value - previous[port]) / interval / 1e6
+                     for port, value in counters.items()
+                     if port in previous and value >= previous[port]}
+        self.port_rates[dp.id] = (previous_time, sampled, rates)
+
+    def load_balance_status(self):
+        experiment = self.balance
+        if experiment is None:
+            return None
+        now = time.monotonic()
+        links = []
+        for edge in experiment['links']:
+            previous, sampled, rates = self.port_rates.get(edge['src'], (0, 0, {}))
+            current = (experiment['status'] == 'installed' and
+                       previous >= experiment['installed_at'] and now - sampled < 6)
+            links.append(dict(edge, measured_mbps=rates.get(edge['port']) if current else None,
+                              sample_start=previous if current else None,
+                              sample_end=sampled if current else None))
+        return dict(experiment, links=links, sampled_at=now)
+
     def topology(self):
         self.refresh()
         edges = [dict(src=a, dst=b, src_port=port, dst_port=self.graph[b][a])
@@ -513,6 +637,33 @@ class LabAPI(ControllerBase):
             return self.response(service)
         except (ValueError, KeyError) as exc:
             return self.response({'error': str(exc)}, 400)
+
+    @route('lab_balance', '/api/load-balance', methods=['GET'])
+    def load_balance(self, req, **kwargs):
+        return self.response({'experiment': self.lab.load_balance_status()})
+
+    @route('lab_balance_plan', '/api/load-balance/plan', methods=['GET'])
+    def load_balance_plan(self, req, **kwargs):
+        try:
+            return self.response(self.lab.plan_load_balance(int(req.params.get('seed', DEFAULT_SEED))))
+        except (ValueError, KeyError) as exc:
+            return self.response({'error': str(exc)}, 400)
+
+    @route('lab_balance_install', '/api/load-balance', methods=['POST'])
+    def load_balance_install(self, req, **kwargs):
+        try:
+            data = req.json
+            if not isinstance(data, dict):
+                raise ValueError('需要 JSON 对象')
+            return self.response({'experiment': self.lab.install_load_balance(
+                data.get('seed', DEFAULT_SEED), data.get('mode'))})
+        except (ValueError, KeyError) as exc:
+            return self.response({'error': str(exc)}, 400)
+
+    @route('lab_balance_clear', '/api/load-balance', methods=['DELETE'])
+    def load_balance_clear(self, req, **kwargs):
+        self.lab.clear_load_balance(req.params.get('id'))
+        return self.response({'experiment': self.lab.load_balance_status()})
 
     @route('lab_broadcast', '/api/broadcast', methods=['GET'])
     def broadcast(self, req, **kwargs):

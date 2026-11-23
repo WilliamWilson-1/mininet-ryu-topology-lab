@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import os
 
+LINK_CAPACITY_MBPS = 10
+
 ROOT = Path(__file__).resolve().parent
 SELECTION = ROOT / '.active-topology'
 
