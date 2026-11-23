@@ -37,6 +37,19 @@ def _end_processes(processes):
             process.wait()
 
 
+def _receiver_stats(report):
+    summaries = report['end']
+    received = summaries.get('sum_received') or summaries['sum']
+    bits_per_second = received['bits_per_second']
+    if not bits_per_second:
+        # iperf3 3.9 can report zero bytes in its server-side UDP summary.
+        intervals = [interval['sum'] for interval in report['intervals']]
+        seconds = sum(row['seconds'] for row in intervals)
+        if seconds > 0:
+            bits_per_second = 8 * sum(row['bytes'] for row in intervals) / seconds
+    return dict(received_mbps=bits_per_second/1e6, lost_percent=received['lost_percent'])
+
+
 def _run_round(net, base_url, experiment, seconds, output):
     processes, servers, clients = [], [], []
     samples, seen = {}, set()
@@ -63,7 +76,7 @@ def _run_round(net, base_url, experiment, seconds, output):
                 host = net.get(f"h{flow['src']}")
                 target = net.get(f"h{flow['dst']}")
                 command = ['iperf3', '-c', target.IP(), '-u', '-p', str(flow['port']),
-                           '-b', f"{flow['rate_mbps']}M", '-t', str(seconds),
+                           '-b', f"{flow['rate_mbps']}M", '-l', '1200', '-t', str(seconds),
                            '--connect-timeout', '5000', '-J']
                 process = host.popen(command, stdout=files.enter_context(
                     (output / (flow['id'] + '-client.json')).open('w')),
@@ -102,10 +115,7 @@ def _run_round(net, base_url, experiment, seconds, output):
     flows = []
     for flow in experiment['demands']:
         result = json.loads((output / (flow['id'] + '-server.json')).read_text())
-        summaries = result['end']
-        received = summaries.get('sum_received') or summaries['sum']
-        flows.append(dict(id=flow['id'], received_mbps=received['bits_per_second']/1e6,
-                          lost_percent=received['lost_percent']))
+        flows.append(dict(id=flow['id'], **_receiver_stats(result)))
     links = []
     for edge in experiment['links']:
         values = samples.get((edge['src'], edge['dst']), [])
